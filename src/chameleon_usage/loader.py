@@ -1,20 +1,30 @@
+import os
 import warnings
 
 import ibis
-import polars as pl
 
 from chameleon_usage.utils import SiteConfig
 
 TABLES = {
     "blazar": [
-        "computehosts",
+        # generic
         "leases",
         "reservations",
-        "computehost_allocations",
-        "computehost_reservations",
-        "instance_reservations",
+        # computehost: baremetal and kvm
+        "computehosts",
         "computehost_extra_capabilities",
-        "extra_capabilities",
+        "computehost_reservations",  # physical:host
+        "instance_reservations",  # flavor:instance
+        "computehost_allocations",
+        # CHI@Edge: Device Model
+        "devices",
+        "device_extra_capabilities",
+        "device_reservations",
+        "device_allocations",
+        # do we need these?
+        # "extra_capabilities", # on edge not kvm?
+        # resource_properties # on kvm but not edge?
+        # "events",
     ],
     "nova": [
         "compute_nodes",
@@ -31,6 +41,13 @@ TABLES = {
         "flavor_extra_specs",
         "flavor_projects",
     ],
+    "zun": [
+        "compute_node",
+        "container",
+        "container_actions",
+        "container_actions_events",
+        "zun_service",
+    ],
 }
 
 
@@ -38,19 +55,30 @@ def _fetch_table(db_conn: ibis.BaseBackend, schemaname: str, tablename: str):
     return db_conn.table(tablename, database=schemaname).to_polars()
 
 
-def dump_site_to_parquet(config: SiteConfig):
-    for schema, tables in TABLES.items():
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Unable to set session timezone")
-            conn = ibis.connect(getattr(config.db_uris, schema))
+def _connect_schema(db_uri) -> ibis.BaseBackend:
+    """Wrapper to handle warning on temp DBs."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Unable to set session timezone")
+        return ibis.connect(db_uri)
 
-        for table in tables:
-            tablename = f"{schema}.{table}"
-            output_file = f"{config.raw_spans}/{tablename}"
+
+def dump_site_to_parquet(config: SiteConfig, force: bool = False) -> dict[str, str]:
+    results = {}
+    for schema, uri in config.db_uris.items():
+        conn = _connect_schema(uri)
+        for table in TABLES.get(schema, []):
+            key = f"{schema}.{table}"
+            output_file = f"{config.raw_spans}/{schema}.{table}.parquet"
+
+            if os.path.exists(output_file) and not force:
+                results[key] = "SKIP"
+                continue
+
             try:
                 df = _fetch_table(conn, schema, table)
-            except Exception as ex:
-                print(f"Couldn't fetch {tablename}, got {ex}, skipping...")
-            else:
-                print(f"fetched {df.height} rows from {tablename}")
                 df.write_parquet(output_file)
+                results[key] = str(df.height)
+            except Exception:
+                results[key] = "_FAIL_"
+
+    return results
