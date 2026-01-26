@@ -115,3 +115,41 @@ Can be deleted midway through
 Can be deleted before they start
 Gaps: when did a blazar host exist, and when was it reservable. 
 But: legacy “total” is exists - maintenance
+
+
+
+## Raw Spans
+
+┌───────────────────────────────────────┬──────────┬────────┬──────────┬──────────┐
+│ table                                 ┆ CHI@TACC ┆ CHI@UC ┆ KVM@TACC ┆ CHI@Edge │
+│ ---                                   ┆ ---      ┆ ---    ┆ ---      ┆ ---      │
+│ str                                   ┆ str      ┆ str    ┆ str      ┆ str      │
+╞═══════════════════════════════════════╪══════════╪════════╪══════════╪══════════╡
+│ nova.compute_nodes                    ┆ 3449     ┆ 1873   ┆ 140      ┆ null     │
+│ nova.instances                        ┆ 146890   ┆ 85998  ┆ 156409   ┆ null     │
+│ nova.instance_actions                 ┆ 498688   ┆ 312739 ┆ 835264   ┆ null     │
+│ nova.instance_actions_events          ┆ 603885   ┆ 327166 ┆ 866074   ┆ null     │
+│ nova.instance_faults                  ┆ 364780   ┆ 205091 ┆ 17198    ┆ null     │
+│ nova.instance_extra                   ┆ 148996   ┆ 87528  ┆ 178318   ┆ null     │
+│ nova.services                         ┆ 544      ┆ 179    ┆ 148      ┆ null     │
+│ nova_api.request_specs                ┆ 140475   ┆ 89950  ┆ 159676   ┆ null     │
+│ nova_api.flavors                      ┆ 5        ┆ 1      ┆ 74       ┆ null     │
+│ nova_api.flavor_extra_specs           ┆ 6        ┆ 4      ┆ 210      ┆ null     │
+│ nova_api.flavor_projects              ┆ 0        ┆ 0      ┆ 38       ┆ null     │
+│ blazar.leases                         ┆ 223503   ┆ 73830  ┆ 1109     ┆ 8496     │
+│ blazar.reservations                   ┆ 234508   ┆ 87100  ┆ 940      ┆ 7831     │
+│ blazar.computehosts                   ┆ 356      ┆ 135    ┆ 93       ┆ 0        │
+│ blazar.computehost_extra_capabilities ┆ 19513    ┆ 10455  ┆ 102      ┆ 0        │
+│ blazar.computehost_reservations       ┆ 87717    ┆ 60442  ┆ 42       ┆ 0        │
+│ blazar.instance_reservations          ┆ 0        ┆ 0      ┆ 892      ┆ 0        │
+│ blazar.computehost_allocations        ┆ 164491   ┆ 97631  ┆ 3804     ┆ 0        │
+│ blazar.devices                        ┆ 0        ┆ 0      ┆ 0        ┆ 91       │
+│ blazar.device_extra_capabilities      ┆ 0        ┆ 0      ┆ 0        ┆ 609      │
+│ blazar.device_reservations            ┆ 0        ┆ 0      ┆ 0        ┆ 7828     │
+│ blazar.device_allocations             ┆ 0        ┆ 0      ┆ 0        ┆ 8109     │
+│ zun.compute_node                      ┆ null     ┆ null   ┆ null     ┆ 1        │
+│ zun.container                         ┆ null     ┆ null   ┆ null     ┆ 4        │
+│ zun.container_actions                 ┆ null     ┆ null   ┆ null     ┆ 4        │
+│ zun.container_actions_events          ┆ null     ┆ null   ┆ null     ┆ 4        │
+│ zun.zun_service                       ┆ null     ┆ null   ┆ null     ┆ 1        │
+└───────────────────────────────────────┴──────────┴────────┴──────────┴──────────┘
