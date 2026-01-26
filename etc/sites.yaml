@@ -1,0 +1,33 @@
+# Site database configurations
+
+chi_tacc:
+  site_name: "CHI@TACC"
+  raw_spans: 'output/raw_spans/chi_tacc'
+  db_uris:
+    nova: "mysql://root:root@127.0.0.1:3307/nova"
+    nova_api: "mysql://root:root@127.0.0.1:3307/nova_api"
+    blazar: "mysql://root:root@127.0.0.1:3307/blazar"
+
+chi_uc:
+  site_name: "CHI@UC"
+  raw_spans: 'output/raw_spans/chi_uc'
+  db_uris:
+    nova: "mysql://root:root@127.0.0.1:3309/nova"
+    nova_api: "mysql://root:root@127.0.0.1:3309/nova_api"
+    blazar: "mysql://root:root@127.0.0.1:3309/blazar"
+
+kvm_tacc:
+  site_name: "KVM@TACC"
+  raw_spans: 'output/raw_spans/kvm_tacc'
+  db_uris:
+    nova: "mysql://root:root@127.0.0.1:3308/nova"
+    nova_api: "mysql://root:root@127.0.0.1:3308/nova_api"
+    blazar: "mysql://root:root@127.0.0.1:3308/blazar"
+
+chi_edge:
+  site_name: "CHI@Edge"
+  raw_spans: 'output/raw_spans/chi_edge'
+  db_uris:
+    nova: "mysql://root:root@127.0.0.1:3310/nova"
+    nova_api: "mysql://root:root@127.0.0.1:3310/nova_api"
+    blazar: "mysql://root:root@127.0.0.1:3310/blazar"

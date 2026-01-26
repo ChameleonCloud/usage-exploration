@@ -9,8 +9,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "connectorx>=0.4.5",
+    "ibis-framework[mysql]>=11.0.0",
     "matplotlib>=3.10.8",
+    "pandera[polars]>=0.28.1",
     "polars>=1.37.1",
+    "pyyaml>=6.0.3",
     "seaborn>=0.13.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.14",
 ]
