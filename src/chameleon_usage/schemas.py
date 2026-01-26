@@ -41,39 +41,19 @@ class NovaHostRaw(pa.DataFrameModel):
     hypervisor_type: str = pa.Field(coerce=True)
 
 
-# class CanonicalSpan(pa.DataFrameModel):
-#     entity_id: str = pa.Field(unique=True)
-#     entity_type: str
-#     start: pl.datetime_
-#     en
+class NovaInstanceRaw(pa.DataFrameModel):
+    id: str = pa.Field(unique=True, coerce=True)
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
+    host: str = pa.Field()
+    node: str = pa.Field()
 
-# [
-#     "created_at",
-#     "updated_at",
-#     "id",
-#     "vcpus",
-#     "cpu_info",
-#     "hypervisor_type",
-#     "hypervisor_version",
-#     "hypervisor_hostname",
-#     "service_name",
-#     "memory_mb",
-#     "local_gb",
-#     "status",
-#     "trust_id",
-#     "reservable",
-#     "availability_zone",
-#     "deleted",
-#     "deleted_at",
-#     "disabled",
-# ]
-# [
-#     "created_at",
-#     "updated_at",
-#     "id",
-#     "computehost_id",
-#     "capability_value",
-#     "property_id",
-#     "deleted",
-#     "deleted_at",
-# ]
+
+class NodeUsageReportCache(pa.DataFrameModel):
+    date: pl.Datetime = pa.Field(coerce=True)
+    node_type: str = pa.Field()
+    maint_hours: float = pa.Field()
+    reserved_hours: float = pa.Field()
+    used_hours: float = pa.Field()
+    idle_hours: float = pa.Field()
+    total_hours: float = pa.Field(coerce=True)

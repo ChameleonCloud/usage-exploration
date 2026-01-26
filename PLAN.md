@@ -13,6 +13,6 @@
 - [x]: fetch tables, per site, from local dbs to parquet files.
    stored in input/{site_name}/{schemaname}.{tablename}.{date}.parquet
 - [x]: fetch legacy `chameleon_usage` tables
-- [ ]: import data from parquet
+- [x]: import data from parquet
 - [ ]: plot "legacy" chameleon usage
 - [ ]: do initial joins?
