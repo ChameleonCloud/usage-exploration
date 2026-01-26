@@ -48,6 +48,14 @@ TABLES = {
         "container_actions_events",
         "zun_service",
     ],
+    "chameleon_usage": [
+        "node_count_cache",
+        "node_event",
+        "node_maintenance",
+        "node_usage",
+        "node_usage_report_cache",
+        "node_project_usage_report_cache",
+    ],
 }
 
 

@@ -7,6 +7,7 @@ chi_tacc:
     nova: "mysql://root:root@127.0.0.1:3307/nova"
     nova_api: "mysql://root:root@127.0.0.1:3307/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3307/blazar"
+    chameleon_usage: "mysql://root:root@127.0.0.1:3307/chameleon_usage"
 
 chi_uc:
   site_name: "CHI@UC"
@@ -15,6 +16,7 @@ chi_uc:
     nova: "mysql://root:root@127.0.0.1:3309/nova"
     nova_api: "mysql://root:root@127.0.0.1:3309/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3309/blazar"
+    chameleon_usage: "mysql://root:root@127.0.0.1:3309/chameleon_usage"
 
 kvm_tacc:
   site_name: "KVM@TACC"
