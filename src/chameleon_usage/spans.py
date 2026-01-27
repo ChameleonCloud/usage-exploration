@@ -137,6 +137,7 @@ class BaseSpanSource(ABC):
             .then(pl.lit("INVALID_PHANTOM_SPAN"))
             .otherwise(pl.lit("VALID_COMMITMENT"))
         )
+        tagged = tagged.with_columns(source=pl.lit(self.source_name))
 
         # 4. Split - Valid Spans (Strict Schema)
         valid = tagged.filter(pl.col("data_status") == "VALID_COMMITMENT").select(

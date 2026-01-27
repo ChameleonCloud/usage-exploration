@@ -22,5 +22,5 @@ Day 2
 - [x] Fix `etc/sites.yaml:5` to use `output/raw_spans/chi_tacc`
 - [x] Add `NovaHostSource` from `nova.services` (compute services only)
 - [x] Add `BlazarHostSource` from `blazar.computehosts`
-- [ ] Tag both valid and audit rows with `source`
+- [x] Tag both valid and audit rows with `source`
 - [ ] Implement minimal ledger → cumsum aggregation and plot the 4 series
