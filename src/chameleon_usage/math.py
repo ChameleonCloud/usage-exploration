@@ -16,7 +16,7 @@ def spans_to_events(
     - source: str (span type / series)
     - hypervisor_hostname (or resource_id): str (for per-host checks)
     """
-    keys = group_cols or ["source", "hypervisor_hostname"]
+    keys = group_cols or ["source", "resource_id"]
     start_events = spans.select(
         *keys,
         pl.col("start").alias("timestamp"),

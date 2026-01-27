@@ -31,8 +31,16 @@
 
 ### Goals (augmentation & derived metrics)
 
-- [ ] fix grouping of audit data: group by source, data status, year(start date)
-- [ ] emit audit data with results
+- [x] fix grouping of audit data: group by source, data status, year(start date)
+- [x] emit audit data with results
+- [x] better output format
+- [ ] check invariant: no lost rows
+- [ ] check invariant: no lost hours
+- [ ] legacy comparison plot
+
+
+
+
 - [ ] investigate available nova services data: does it give better timestamps and history for nova compute nodes?
 - [ ] decide how to combine nova services and compute hosts. is it a join? host spine?
 

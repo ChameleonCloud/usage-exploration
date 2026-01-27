@@ -90,6 +90,36 @@ def _emit_audit(
     print(f"wrote: {audit_path}")
 
 
+def _check_row_invariant(
+    raw_df: pl.DataFrame,
+    valid_df: pl.DataFrame,
+    audit_df: pl.DataFrame,
+) -> None:
+    """Verify: raw_rows = valid_rows + audit_rows per (site, source)."""
+    raw_counts = raw_df.group_by("site", "source").len().rename({"len": "raw"})
+    valid_counts = valid_df.group_by("site", "source").len().rename({"len": "valid"})
+    audit_counts = audit_df.group_by("site", "source").len().rename({"len": "audit"})
+
+    check = (
+        raw_counts.join(valid_counts, on=["site", "source"], how="full", coalesce=True)
+        .join(audit_counts, on=["site", "source"], how="full", coalesce=True)
+        .fill_null(0)
+        .with_columns(
+            computed=(pl.col("valid") + pl.col("audit")),
+            match=(pl.col("raw") == (pl.col("valid") + pl.col("audit"))),
+        )
+        .sort("site", "source")
+    )
+
+    violations = check.filter(~pl.col("match"))
+    if violations.height > 0:
+        print("\n=== INVARIANT VIOLATED: rows lost in split ===")
+        print(violations)
+        raise AssertionError("Row count invariant failed")
+
+    print(f"\n=== INVARIANT OK: {check.height} (site, source) pairs verified ===")
+
+
 def _spans_to_daily_wide(
     spans: pl.DataFrame,
     window_start: datetime,
@@ -207,15 +237,20 @@ def main():
     
     """
 
-    # TODO: fix this naming properly!!!
-    spans = all_usage.rename({"resource_id": "hypervisor_hostname"}).collect()
+    # Collect all data
+    raw_df = all_raws.collect()
+    valid_df = all_usage.collect()
+    audit_df = all_audit.collect()
+
+    # Verify data integrity before processing
+    _check_row_invariant(raw_df, valid_df, audit_df)
 
     window_start = datetime(2010, 1, 1)
     window_end = datetime(2025, 1, 1)
 
-    _emit_audit(all_audit.collect(), spans, output_dir, window_start, window_end)
+    _emit_audit(audit_df, valid_df, output_dir, window_start, window_end)
     daily_wide = _spans_to_daily_wide(
-        spans,
+        valid_df,
         window_start=window_start,
         window_end=window_end,
         group_cols=["site", "source"],  # ensure grouping by both site and span source
