@@ -24,3 +24,6 @@ Day 2
 - [x] Add `BlazarHostSource` from `blazar.computehosts`
 - [x] Tag both valid and audit rows with `source`
 - [ ] Implement minimal ledger → cumsum aggregation and plot the 4 series
+   - [ ] split spans to events
+   - [ ] sweepling alg on events
+- [ ] add pure math method to resample for outputs
