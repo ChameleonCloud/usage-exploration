@@ -1,3 +1,6 @@
-.venv
+data
 output
+
+# python
+.venv
 __pycache__
