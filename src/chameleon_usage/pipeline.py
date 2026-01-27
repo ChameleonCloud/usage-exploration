@@ -1,7 +1,16 @@
+from dataclasses import dataclass
+
 import polars as pl
 
 from chameleon_usage import plots, spans, utils
 from chameleon_usage.utils import SiteConfig
+
+
+@dataclass
+class PipelineOutput:
+    valid_spans: pl.LazyFrame
+    audit_spans: pl.LazyFrame
+    raw_spans: pl.LazyFrame
 
 
 class UsagePipeline:
@@ -9,11 +18,11 @@ class UsagePipeline:
         self.site_conf = site_conf
         self.span_loader = spans.RawSpansLoader(self.site_conf)
 
-    def compute_spans(self) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+    def compute_spans(self) -> PipelineOutput:
         """
         Orchestrates the loading, cleaning, and stacking of all span types.
         """
-        sources = [
+        sources: list[spans.BaseSpanSource] = [
             spans.NovaHostSource(self.span_loader),
             spans.BlazarHostSource(self.span_loader),  # when you add it
             spans.BlazarCommitmentSource(self.span_loader),
@@ -22,12 +31,22 @@ class UsagePipeline:
 
         valids: list[pl.LazyFrame] = []
         audits: list[pl.LazyFrame] = []
+        raws: list[pl.LazyFrame] = []
         for src in sources:
             v, a = src.get_spans()
             valids.append(v)
             audits.append(a)
 
-        return pl.concat(valids), pl.concat(audits, how="diagonal")
+            # each span source provides a lazy fetcher for the source data
+            # TODO: store on the span loader instance as instance variable??
+            r = src.get_raw_events()
+            raws.append(r.with_columns(source=pl.lit(src.source_name)))
+
+        return PipelineOutput(
+            valid_spans=pl.concat(valids),
+            audit_spans=pl.concat(audits, how="diagonal"),
+            raw_spans=pl.concat(raws, how="diagonal"),
+        )
 
 
 def main():

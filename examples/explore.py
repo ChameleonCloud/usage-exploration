@@ -145,7 +145,7 @@ def load_site(site: utils.SiteConfig):
 
     print("\nLoading pipeline...")
     pipeline = UsagePipeline(site)
-    usage, audit = pipeline.compute_spans()
+    pipelineresult = pipeline.compute_spans()
 
     try:
         legacy = pipeline.span_loader.legacy_usage
@@ -153,7 +153,7 @@ def load_site(site: utils.SiteConfig):
         print(f"Couldn't load legacy data for {site.site_name}, skipping.")
         legacy = pl.LazyFrame()
 
-    return usage, audit, legacy
+    return pipelineresult, legacy
 
 
 def parse_args():
@@ -183,14 +183,17 @@ def main():
 
     usages = []
     audits = []
+    raws = []
     legacy_usages = []
     for key, site_config in sites.items():
-        usage_df, audit_df, legacy_df = load_site(site_config)
-        usages.append(usage_df.with_columns(site=pl.lit(key)))
-        audits.append(audit_df.with_columns(site=pl.lit(key)))
+        pipelineresult, legacy_df = load_site(site_config)
+        usages.append(pipelineresult.valid_spans.with_columns(site=pl.lit(key)))
+        audits.append(pipelineresult.audit_spans.with_columns(site=pl.lit(key)))
+        raws.append(pipelineresult.raw_spans.with_columns(site=pl.lit(key)))
         legacy_usages.append(legacy_df.with_columns(site=pl.lit(key)))
     all_usage = pl.concat(usages)  # consistent schema
     all_audit = pl.concat(audits, how="diagonal")  # messier schema
+    all_raws = pl.concat(raws, how="diagonal")  # messier schema
     all_legacy_usage = pl.concat(legacy_usages)
 
     ###################
