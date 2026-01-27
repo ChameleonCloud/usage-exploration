@@ -1,4 +1,6 @@
 # module for "pure" math operations, no domain knowledge
+from datetime import datetime
+
 import polars as pl
 
 
@@ -99,4 +101,30 @@ def sweepline_to_wide(
     value_cols = [c for c in wide.columns if c != time_col]
     return wide.with_columns(
         [pl.col(c).fill_null(strategy="forward") for c in value_cols]
+    )
+
+
+def filter_overlapping(
+    spans: pl.LazyFrame,
+    start_col: str,
+    end_col: str,
+    window_start: datetime,
+    window_end: datetime,
+) -> pl.LazyFrame:
+    """Keep spans that touch [window_start, window_end)."""
+    return spans.filter(
+        (pl.col(start_col) < window_end)
+        & ((pl.col(end_col) > window_start) | pl.col(end_col).is_null())
+    )
+
+
+def clip_timeline(
+    timeline: pl.LazyFrame,
+    time_col: str,
+    window_start: datetime,
+    window_end: datetime,
+) -> pl.LazyFrame:
+    """Keep rows within [window_start, window_end)."""
+    return timeline.filter(
+        (pl.col(time_col) >= window_start) & (pl.col(time_col) < window_end)
     )

@@ -23,7 +23,8 @@ Day 2
 - [x] Add `NovaHostSource` from `nova.services` (compute services only)
 - [x] Add `BlazarHostSource` from `blazar.computehosts`
 - [x] Tag both valid and audit rows with `source`
-- [ ] Implement minimal ledger → cumsum aggregation and plot the 4 series
-   - [ ] split spans to events
-   - [ ] sweepling alg on events
-- [ ] add pure math method to resample for outputs
+- [x] Implement minimal ledger → cumsum aggregation and plot the 4 series
+   - [x] split spans to events
+   - [x] sweepling alg on events
+   - [x] add pure math method to resample for outputs
+   - [x] plot results

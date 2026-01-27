@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -31,11 +32,16 @@ def main():
 
     usage, audit = pipeline.compute_spans()
 
+    window_start = datetime(2010, 1, 1)
+    window_end = datetime(2025, 1, 1)
+
     # TODO: fix this naming properly
     spans = usage.rename({"resource_id": "hypervisor_hostname"})
+    spans = math.filter_overlapping(spans, "start", "end", window_start, window_end)
 
-    events = math.spans_to_events(spans)
+    events = math.spans_to_events(spans, group_cols=["source"])
     timeline = math.sweepline(events)
+    timeline = math.clip_timeline(timeline, "timestamp", window_start, window_end)
     daily_wide = math.sweepline_to_wide(timeline, every="1d")
 
     print("\n=== DataFrame Shapes ===")
