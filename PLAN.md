@@ -34,7 +34,7 @@
 - [x] fix grouping of audit data: group by source, data status, year(start date)
 - [x] emit audit data with results
 - [x] better output format
-- [ ] check invariant: no lost rows
+- [x] check invariant: no lost rows
 - [ ] check invariant: no lost hours
 - [ ] legacy comparison plot
 

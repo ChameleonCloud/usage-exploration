@@ -5,119 +5,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import polars as pl
 
-from chameleon_usage import math, utils
+from chameleon_usage import audit, math, utils
 from chameleon_usage.dump_db import dump_site_to_parquet
 from chameleon_usage.pipeline import UsagePipeline
-
-
-def _format_audit_summary(
-    audit_df: pl.DataFrame,
-    valid_df: pl.DataFrame,
-    window_start: datetime,
-    window_end: datetime,
-) -> None:
-    # Filter to rows that overlap the analysis window
-    audit_df = audit_df.filter(
-        (pl.col("start_date") < window_end)
-        & ((pl.col("start_date") >= window_start) | pl.col("start_date").is_null())
-    )
-    valid_df = valid_df.filter(
-        (pl.col("start") < window_end) & (pl.col("start") >= window_start)
-    )
-
-    # Count rows per (site, source) for valid and rejected separately
-    valid_counts = valid_df.group_by("site", "source").len().rename({"len": "valid"})
-    rejected_counts = (
-        audit_df.group_by("site", "source").len().rename({"len": "rejected"})
-    )
-
-    # Full outer join: keep all (site, source) pairs from both sides
-    # - Some pairs may only exist in valid (no rejections)
-    # - Some pairs may only exist in rejected (100% rejection rate)
-    combined = valid_counts.join(
-        rejected_counts, on=["site", "source"], how="full", coalesce=True
-    )
-
-    # Missing counts mean zero (not NULL)
-    combined = combined.fill_null(0)
-
-    # Total = valid + rejected, used as denominator for rejection %
-    totals = combined.with_columns(total=(pl.col("valid") + pl.col("rejected")))
-
-    for site in audit_df["site"].unique().sort().to_list():
-        site_audit = audit_df.filter(pl.col("site") == site)
-        site_totals = totals.filter(pl.col("site") == site)
-        rejected = site_audit.height
-        total = site_totals["total"].sum()
-
-        summary = (
-            site_audit.with_columns(year=pl.col("start_date").dt.year())
-            .group_by("source", "data_status", "year")
-            .len()
-            .join(site_totals.select("source", "total"), on="source")
-            .with_columns((pl.col("len") / pl.col("total") * 100).round(1).alias("pct"))
-            .drop("total")
-            .sort(
-                ["year", "pct", "source", "data_status"],
-                descending=[True, True, False, False],
-            )
-            .select(
-                pl.col("year").alias("Start Year"),
-                pl.col("source").alias("Span Type"),
-                pl.col("data_status").alias("DQ Category"),
-                pl.col("len").alias("# Affected Rows"),
-                pl.col("pct").alias("% Of Total Rows"),
-            )
-        )
-        print(f"\n=== {site}: {rejected:,} rejected / {total:,} total ===")
-        with pl.Config(tbl_rows=-1):
-            print(summary)
-
-
-def _emit_audit(
-    audit_df: pl.DataFrame,
-    valid_df: pl.DataFrame,
-    output_dir: Path,
-    window_start: datetime,
-    window_end: datetime,
-) -> None:
-    print(f"\n=== AUDIT: {audit_df.shape[0]} rejected rows ===")
-    if audit_df.height == 0:
-        return
-    _format_audit_summary(audit_df, valid_df, window_start, window_end)
-    audit_path = output_dir / "audit.parquet"
-    audit_df.write_parquet(audit_path)
-    print(f"wrote: {audit_path}")
-
-
-def _check_row_invariant(
-    raw_df: pl.DataFrame,
-    valid_df: pl.DataFrame,
-    audit_df: pl.DataFrame,
-) -> None:
-    """Verify: raw_rows = valid_rows + audit_rows per (site, source)."""
-    raw_counts = raw_df.group_by("site", "source").len().rename({"len": "raw"})
-    valid_counts = valid_df.group_by("site", "source").len().rename({"len": "valid"})
-    audit_counts = audit_df.group_by("site", "source").len().rename({"len": "audit"})
-
-    check = (
-        raw_counts.join(valid_counts, on=["site", "source"], how="full", coalesce=True)
-        .join(audit_counts, on=["site", "source"], how="full", coalesce=True)
-        .fill_null(0)
-        .with_columns(
-            computed=(pl.col("valid") + pl.col("audit")),
-            match=(pl.col("raw") == (pl.col("valid") + pl.col("audit"))),
-        )
-        .sort("site", "source")
-    )
-
-    violations = check.filter(~pl.col("match"))
-    if violations.height > 0:
-        print("\n=== INVARIANT VIOLATED: rows lost in split ===")
-        print(violations)
-        raise AssertionError("Row count invariant failed")
-
-    print(f"\n=== INVARIANT OK: {check.height} (site, source) pairs verified ===")
 
 
 def _spans_to_daily_wide(
@@ -209,48 +99,39 @@ def main():
     plot_dir = output_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    # load and categorize data from each site
-
-    usages = []
-    audits = []
-    raws = []
-    legacy_usages = []
-    for key, site_config in sites.items():
-        pipelineresult, legacy_df = load_site(site_config)
-        usages.append(pipelineresult.valid_spans.with_columns(site=pl.lit(key)))
-        audits.append(pipelineresult.audit_spans.with_columns(site=pl.lit(key)))
-        raws.append(pipelineresult.raw_spans.with_columns(site=pl.lit(key)))
-        legacy_usages.append(legacy_df.with_columns(site=pl.lit(key)))
-    all_usage = pl.concat(usages)  # consistent schema
-    all_audit = pl.concat(audits, how="diagonal")  # messier schema
-    all_raws = pl.concat(raws, how="diagonal")  # messier schema
-    all_legacy_usage = pl.concat(legacy_usages)
-
-    ###################
-    # process all sites
-    ###################
-
-    """
-    TODO!!!!!
-
-    outputs tables of site, source, data status, year, len (rows)
-    
-    """
-
-    # Collect all data
-    raw_df = all_raws.collect()
-    valid_df = all_usage.collect()
-    audit_df = all_audit.collect()
-
-    # Verify data integrity before processing
-    _check_row_invariant(raw_df, valid_df, audit_df)
-
     window_start = datetime(2010, 1, 1)
     window_end = datetime(2025, 1, 1)
 
-    _emit_audit(audit_df, valid_df, output_dir, window_start, window_end)
+    # Load, audit, and collect data from each site
+    all_valid = []
+    all_legacy = []
+    for site_name, site_config in sites.items():
+        pipelineresult, legacy_df = load_site(site_config)
+
+        # Collect per-site data
+        raw_df = pipelineresult.raw_spans.collect()
+        valid_df = pipelineresult.valid_spans.collect()
+        audit_df = pipelineresult.audit_spans.collect()
+
+        # Run audit checks per-site (includes row + hour invariants)
+        audit.run_site_audit(
+            raw_df,
+            valid_df,
+            audit_df,
+            site=site_name,
+            window_start=window_start,
+            window_end=window_end,
+            output_dir=output_dir,
+        )
+
+        # Accumulate for combined processing
+        all_valid.append(valid_df.with_columns(site=pl.lit(site_name)))
+        all_legacy.append(legacy_df.with_columns(site=pl.lit(site_name)))
+
+    # Combine all sites for plotting
+    valid_spans = pl.concat(all_valid)
     daily_wide = _spans_to_daily_wide(
-        valid_df,
+        valid_spans,
         window_start=window_start,
         window_end=window_end,
         group_cols=["site", "source"],  # ensure grouping by both site and span source
