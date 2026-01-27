@@ -10,26 +10,81 @@ from chameleon_usage.dump_db import dump_site_to_parquet
 from chameleon_usage.pipeline import UsagePipeline
 
 
-def _format_audit_summary(audit_df: pl.DataFrame) -> None:
+def _format_audit_summary(
+    audit_df: pl.DataFrame,
+    valid_df: pl.DataFrame,
+    window_start: datetime,
+    window_end: datetime,
+) -> None:
+    # Filter to rows that overlap the analysis window
+    audit_df = audit_df.filter(
+        (pl.col("start_date") < window_end)
+        & ((pl.col("start_date") >= window_start) | pl.col("start_date").is_null())
+    )
+    valid_df = valid_df.filter(
+        (pl.col("start") < window_end) & (pl.col("start") >= window_start)
+    )
+
+    # Count rows per (site, source) for valid and rejected separately
+    valid_counts = valid_df.group_by("site", "source").len().rename({"len": "valid"})
+    rejected_counts = (
+        audit_df.group_by("site", "source").len().rename({"len": "rejected"})
+    )
+
+    # Full outer join: keep all (site, source) pairs from both sides
+    # - Some pairs may only exist in valid (no rejections)
+    # - Some pairs may only exist in rejected (100% rejection rate)
+    combined = valid_counts.join(
+        rejected_counts, on=["site", "source"], how="full", coalesce=True
+    )
+
+    # Missing counts mean zero (not NULL)
+    combined = combined.fill_null(0)
+
+    # Total = valid + rejected, used as denominator for rejection %
+    totals = combined.with_columns(total=(pl.col("valid") + pl.col("rejected")))
+
     for site in audit_df["site"].unique().sort().to_list():
-        site_df = audit_df.filter(pl.col("site") == site)
-        total = site_df.height
+        site_audit = audit_df.filter(pl.col("site") == site)
+        site_totals = totals.filter(pl.col("site") == site)
+        rejected = site_audit.height
+        total = site_totals["total"].sum()
+
         summary = (
-            site_df.with_columns(year=pl.col("start_date").dt.year())
+            site_audit.with_columns(year=pl.col("start_date").dt.year())
             .group_by("source", "data_status", "year")
             .len()
-            .with_columns((pl.col("len") / total * 100).round(1).alias("pct"))
-            .sort("source", "data_status", "year")
+            .join(site_totals.select("source", "total"), on="source")
+            .with_columns((pl.col("len") / pl.col("total") * 100).round(1).alias("pct"))
+            .drop("total")
+            .sort(
+                ["year", "pct", "source", "data_status"],
+                descending=[True, True, False, False],
+            )
+            .select(
+                pl.col("year").alias("Start Year"),
+                pl.col("source").alias("Span Type"),
+                pl.col("data_status").alias("DQ Category"),
+                pl.col("len").alias("# Affected Rows"),
+                pl.col("pct").alias("% Of Total Rows"),
+            )
         )
-        print(f"\n=== {site} ({total:,} rejected) ===")
-        print(summary)
+        print(f"\n=== {site}: {rejected:,} rejected / {total:,} total ===")
+        with pl.Config(tbl_rows=-1):
+            print(summary)
 
 
-def _emit_audit(audit_df: pl.DataFrame, output_dir: Path) -> None:
+def _emit_audit(
+    audit_df: pl.DataFrame,
+    valid_df: pl.DataFrame,
+    output_dir: Path,
+    window_start: datetime,
+    window_end: datetime,
+) -> None:
     print(f"\n=== AUDIT: {audit_df.shape[0]} rejected rows ===")
-    if audit_df.shape[0] == 0:
+    if audit_df.height == 0:
         return
-    _format_audit_summary(audit_df)
+    _format_audit_summary(audit_df, valid_df, window_start, window_end)
     audit_path = output_dir / "audit.parquet"
     audit_df.write_parquet(audit_path)
     print(f"wrote: {audit_path}")
@@ -149,14 +204,17 @@ def main():
     
     """
 
-    _emit_audit(all_audit.collect(), output_dir)
-
     # TODO: fix this naming properly!!!
-    spans = all_usage.rename({"resource_id": "hypervisor_hostname"})
+    spans = all_usage.rename({"resource_id": "hypervisor_hostname"}).collect()
+
+    window_start = datetime(2010, 1, 1)
+    window_end = datetime(2025, 1, 1)
+
+    _emit_audit(all_audit.collect(), spans, output_dir, window_start, window_end)
     daily_wide = _spans_to_daily_wide(
         spans,
-        window_start=datetime(2010, 1, 1),
-        window_end=datetime(2025, 1, 1),
+        window_start=window_start,
+        window_end=window_end,
         group_cols=["site", "source"],  # ensure grouping by both site and span source
         every="30d",
     )
