@@ -26,9 +26,9 @@ kvm_tacc:
     nova_api: "mysql://root:root@127.0.0.1:3308/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3308/blazar"
 
-chi_edge:
-  site_name: "CHI@Edge"
-  raw_spans: 'output/raw_spans/chi_edge'
-  db_uris:
-    blazar: "mysql://root:root@127.0.0.1:3310/blazar"
-    zun: "mysql://root:root@127.0.0.1:3310/zun"
+# chi_edge:
+#   site_name: "CHI@Edge"
+#   raw_spans: 'output/raw_spans/chi_edge'
+#   db_uris:
+#     blazar: "mysql://root:root@127.0.0.1:3310/blazar"
+#     zun: "mysql://root:root@127.0.0.1:3310/zun"
