@@ -41,6 +41,14 @@ class NovaHostRaw(pa.DataFrameModel):
     hypervisor_type: str = pa.Field(coerce=True)
 
 
+class NovaServiceRaw(pa.DataFrameModel):
+    id: int = pa.Field(coerce=True)
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
+    host: str = pa.Field()
+    binary: str = pa.Field()
+
+
 class NovaInstanceRaw(pa.DataFrameModel):
     id: str = pa.Field(unique=True, coerce=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
@@ -57,3 +65,19 @@ class NodeUsageReportCache(pa.DataFrameModel):
     used_hours: float = pa.Field()
     idle_hours: float = pa.Field()
     total_hours: float = pa.Field(coerce=True)
+
+
+################################################
+# Used for transforming source tables into spans
+################################################
+class RawEventBase(pa.DataFrameModel):
+    entity_id: str = pa.Field()
+    start_date: pl.Datetime = pa.Field(coerce=True)
+    hypervisor_hostname: str = pa.Field(nullable=True)
+
+
+class CanonicalSpan(pa.DataFrameModel):
+    resource_id: str = pa.Field()
+    start: pl.Datetime = pa.Field(coerce=True)
+    end: pl.Datetime = pa.Field(coerce=True)
+    source: str = pa.Field()

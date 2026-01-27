@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 
+import pandera as pa
 import polars as pl
 
 from chameleon_usage import schemas
@@ -13,7 +15,12 @@ class RawSpansLoader:
         self.raw_spans = site_conf.raw_spans
 
     def _load(self, schema: str, table: str) -> pl.LazyFrame:
-        path = f"{self.raw_spans}/{schema}.{table}.parquet"
+        path = Path(self.raw_spans) / f"{schema}.{table}.parquet"
+        if not path.exists():
+            raise FileNotFoundError(
+                (f"Missing parquet: {path} Did you dump_db? Table name right?")
+            )
+
         return pl.scan_parquet(path)
 
     @property
@@ -38,11 +45,15 @@ class RawSpansLoader:
 
     @property
     def nova_computenodes(self) -> pl.LazyFrame:
-        return schemas.NovaInstanceRaw.validate(self._load("nova", "computenodes"))
+        return schemas.NovaHostRaw.validate(self._load("nova", "compute_nodes"))
 
     @property
     def nova_instances(self) -> pl.LazyFrame:
         return schemas.NovaInstanceRaw.validate(self._load("nova", "instances"))
+
+    @property
+    def nova_services(self) -> pl.LazyFrame:
+        return schemas.NovaServiceRaw.validate(self._load("nova", "services"))
 
     @property
     def legacy_usage(self) -> pl.LazyFrame:
@@ -52,12 +63,35 @@ class RawSpansLoader:
 
 
 class BaseSpanSource(ABC):
+    required_colums = {
+        "hypervisor_hostname",
+        "entity_id",
+        "start_date",
+    }
+
     def __init__(
         self, loader: "RawSpansLoader", source_name: str, resource_id_col: str
     ):
+        """
+        Store the loader and the three config knobs used by `get_spans()`.
+
+        - loader: where raw tables come from
+        - source_name: label written to the output `source` column
+        - resource_id_col: raw column validated and renamed to `resource_id`
+        """
         self.loader = loader
         self.source_name = source_name
         self.resource_id_col = resource_id_col
+
+    @staticmethod
+    def _require_columns(lf: pl.LazyFrame, required: set[str], where: str) -> None:
+        names = set(lf.collect_schema().names())
+        missing = required - names
+        if missing:
+            raise ValueError(
+                f"{where}.get_raw_events(): missing {sorted(missing)}; "
+                f"required={sorted(required)}"
+            )
 
     @abstractmethod
     def get_raw_events(self) -> pl.LazyFrame:
@@ -67,17 +101,27 @@ class BaseSpanSource(ABC):
         - [resource_id_col]
         - Plus any columns needed for end_signals
         """
-        pass
+
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def end_signals(self) -> list[pl.Expr]:
         """List of columns/expressions to check for the earliest end date."""
-        pass
+        raise NotImplementedError
 
     def get_spans(self) -> tuple[pl.LazyFrame, pl.LazyFrame]:
         # 1. Load Source-Specific Data (The "Messy" Part)
         raw = self.get_raw_events()
+
+        self._require_columns(raw, self.required_colums, self.source_name)
+        # validate that columns exist
+        try:
+            raw = schemas.RawEventBase.validate(raw, lazy=True)
+        except pa.errors.SchemaErrors as e:
+            raise ValueError(
+                f"{self.source_name}: RawEventBase failed\n{e.failure_cases}"
+            ) from e
 
         # 2. Calculate Robust End (The "Min" Logic)
         # We fill nulls with MAX_DATE to ensure min() picks real dates.
@@ -108,7 +152,60 @@ class BaseSpanSource(ABC):
         return valid, audit
 
 
+class NovaHostSource(BaseSpanSource):
+    """
+    Source Loader for nova computehosts.
+
+    This span type produces "total" usage/capacity.
+    TODO: Handling of missing data via nova services
+    """
+
+    def __init__(self, loader):
+        super().__init__(loader, "nova_computenodes", "hypervisor_hostname")
+
+    def get_raw_events(self) -> pl.LazyFrame:
+        return self.loader.nova_computenodes.select(
+            pl.col("hypervisor_hostname"),
+            pl.col("id").alias("entity_id"),
+            pl.col("created_at").alias("start_date"),
+            pl.col("deleted_at"),
+        )
+
+    @property
+    def end_signals(self) -> list[pl.Expr]:
+        return [pl.col("deleted_at")]
+
+
+class BlazarHostSource(BaseSpanSource):
+    """
+    Source Loader for blazar computehosts.
+
+    This span type produces "reservable" usage/capacity.
+    """
+
+    def __init__(self, loader):
+        super().__init__(loader, "blazar_computehosts", "hypervisor_hostname")
+
+    def get_raw_events(self) -> pl.LazyFrame:
+        return self.loader.blazar_hosts.select(
+            pl.col("hypervisor_hostname"),
+            pl.col("id").alias("entity_id"),
+            pl.col("created_at").alias("start_date"),
+            pl.col("deleted_at"),
+        )
+
+    @property
+    def end_signals(self) -> list[pl.Expr]:
+        return [pl.col("deleted_at")]
+
+
 class BlazarCommitmentSource(BaseSpanSource):
+    """
+    Source Loader for blazar allocations.
+
+    This span type produces "committed" usage/capacity.
+    """
+
     def __init__(self, loader):
         super().__init__(loader, "blazar_allocations", "hypervisor_hostname")
 
@@ -135,6 +232,7 @@ class BlazarCommitmentSource(BaseSpanSource):
                 left_on="compute_host_id",
                 right_on="id",
             )
+            .with_columns(pl.col("id").alias("entity_id"))  # use allocation pk
             # Standardize 'created_at' to 'start_date' for the Base Class contract
             # (Assuming blazar_allocations already has start_date, but ensuring consistency)
         )
@@ -151,6 +249,13 @@ class BlazarCommitmentSource(BaseSpanSource):
 
 
 class NovaOccupiedSource(BaseSpanSource):
+    """
+    Source Loader for nova instances.
+
+    This span type produces "occupied" usage/capacity.
+    TODO: Later work will *also* prodice active usage.
+    """
+
     def __init__(self, loader):
         # Note: Nova often uses 'host' or 'node' instead of hypervisor_hostname
         super().__init__(loader, "nova_instances", "hypervisor_hostname")
@@ -166,4 +271,5 @@ class NovaOccupiedSource(BaseSpanSource):
     @property
     def end_signals(self) -> list[pl.Expr]:
         # Nova only has one way to end: Deletion
+        # TODO: need to handle instance_actions_lifecyle, terminated at, ...
         return [pl.col("deleted_at")]

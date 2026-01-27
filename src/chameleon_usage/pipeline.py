@@ -1,6 +1,6 @@
 import polars as pl
 
-from chameleon_usage import spans, utils
+from chameleon_usage import plots, spans, utils
 from chameleon_usage.utils import SiteConfig
 
 
@@ -13,25 +13,21 @@ class UsagePipeline:
         """
         Orchestrates the loading, cleaning, and stacking of all span types.
         """
+        sources = [
+            spans.NovaHostSource(self.span_loader),
+            spans.BlazarHostSource(self.span_loader),  # when you add it
+            spans.BlazarCommitmentSource(self.span_loader),
+            spans.NovaOccupiedSource(self.span_loader),
+        ]
 
-        # 2. Instantiate the Logic Engines (The Entity Subclasses)
-        blazar_src = spans.BlazarCommitmentSource(self.span_loader)
-        nova_src = spans.NovaOccupiedSource(self.span_loader)
+        valids: list[pl.LazyFrame] = []
+        audits: list[pl.LazyFrame] = []
+        for src in sources:
+            v, a = src.get_spans()
+            valids.append(v)
+            audits.append(a)
 
-        # 3. Execute the Pipelines (Lazy)
-        # Each source applies its own cleaning rules (Phantom detection, etc)
-        blazar_valid, blazar_audit = blazar_src.get_spans()
-        nova_valid, nova_audit = nova_src.get_spans()
-
-        # 4. Stack the Valid Outputs
-        # Because BaseSpanSource enforces the schema, these concat perfectly.
-        all_usage = pl.concat([blazar_valid, nova_valid])
-        all_audit = pl.concat([blazar_audit, nova_audit], how="diagonal")
-
-        # 5. Optional: Return audit logs alongside if needed
-        # return all_usage, {"blazar": blazar_audit, "nova": nova_audit}
-
-        return all_usage, all_audit
+        return pl.concat(valids), pl.concat(audits, how="diagonal")
 
 
 def main():
@@ -44,8 +40,8 @@ def main():
     # utils.print_summary(results)
 
     tacc_spans = UsagePipeline(site_yaml["chi_tacc"])
-    legacy = tacc_spans.span_loader.legacy_usage
-    print(legacy.collect())
+    legacy = tacc_spans.span_loader.legacy_usage.collect()
+    plots.plot_legacy_usage(legacy).show()
 
     # usage, audit = tacc_spans.compute_spans()
 

@@ -9,10 +9,18 @@
 
 ## Order of operations
 
+Day 1
 - [x]: define DB tables to fetch
 - [x]: fetch tables, per site, from local dbs to parquet files.
    stored in input/{site_name}/{schemaname}.{tablename}.{date}.parquet
 - [x]: fetch legacy `chameleon_usage` tables
 - [x]: import data from parquet
-- [ ]: plot "legacy" chameleon usage
-- [ ]: do initial joins?
+- [x]: plot "legacy" chameleon usage
+- [x]: do initial joins?
+
+Day 2
+- [x] Fix `etc/sites.yaml:5` to use `output/raw_spans/chi_tacc`
+- [x] Add `NovaHostSource` from `nova.services` (compute services only)
+- [x] Add `BlazarHostSource` from `blazar.computehosts`
+- [ ] Tag both valid and audit rows with `source`
+- [ ] Implement minimal ledger → cumsum aggregation and plot the 4 series
