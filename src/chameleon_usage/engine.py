@@ -2,7 +2,7 @@ import polars as pl
 from pandera.typing.polars import LazyFrame as LazyGeneric
 
 from chameleon_usage.constants import Cols as C
-from chameleon_usage.constants import Sources, States
+from chameleon_usage.constants import States
 from chameleon_usage.models.domain import FactSchema, TimelineSchema
 
 
@@ -15,26 +15,32 @@ class TimelineBuilder:
 
         valid_facts = FactSchema.validate(raw_facts)
 
+        index_cols = [C.TIMESTAMP, C.ENTITY_ID, C.QUANTITY_TYPE]
+
+        pivoted = valid_facts.collect().pivot(
+            on=FactSchema.source,
+            values=FactSchema.value,
+            index=index_cols,
+            aggregate_function="first",
+        )
+
+        source_cols = [c for c in pivoted.columns if c not in index_cols]
+
         state_sequence = (
-            valid_facts.collect()
-            .pivot(
-                on=FactSchema.source,
-                values=FactSchema.value,
-                index=[str(FactSchema.timestamp), FactSchema.entity_id],
-                aggregate_function="first",
-            )
-            .lazy()
-            # 2. PAINT: Forward Fill logic
-            .with_columns(pl.col(Sources.NOVA).forward_fill().over(C.ENTITY_ID))
-            # 3. RESULT
-            .select(
+            pivoted.lazy()
+            # Forward fill each source column per (entity_id, quantity_type)
+            .with_columns(
                 [
-                    pl.col(C.TIMESTAMP),
-                    pl.col(C.ENTITY_ID),
-                    pl.col(Sources.NOVA).alias("final_state"),
+                    pl.col(s).forward_fill().over([C.ENTITY_ID, C.QUANTITY_TYPE])
+                    for s in source_cols
                 ]
             )
-            .sort([C.ENTITY_ID, C.TIMESTAMP])
+            # Coalesce sources in column order (first non-null wins)
+            .with_columns(
+                pl.coalesce([pl.col(s) for s in source_cols]).alias("final_state")
+            )
+            .select([C.TIMESTAMP, C.ENTITY_ID, C.QUANTITY_TYPE, "final_state"])
+            .sort([C.ENTITY_ID, C.QUANTITY_TYPE, C.TIMESTAMP])
         )
 
         return TimelineSchema.validate(state_sequence)
@@ -59,18 +65,20 @@ class TimelineBuilder:
             .with_columns(
                 pl.col(C.VALUE)
                 .shift(1)
-                .over(C.ENTITY_ID)
+                .over([C.ENTITY_ID, C.QUANTITY_TYPE])
                 .fill_null(0)
                 .alias(C.PREV_VALUE)
             )
             .with_columns((pl.col(C.VALUE) - pl.col(C.PREV_VALUE)).alias(C.DELTA))
             # 3. COMPRESS (Global Aggregation)
             #    Sum all deltas happening at the exact same microsecond across all entities.
-            .group_by(C.TIMESTAMP)
+            .group_by([C.TIMESTAMP, C.QUANTITY_TYPE])
             .agg(pl.col(C.DELTA).sum())
-            .sort(C.TIMESTAMP)
+            .sort([C.QUANTITY_TYPE, C.TIMESTAMP])
             # 4. INTEGRATE (Running Total)
-            #    Walk forward in time to determine the total count.
-            .with_columns(pl.col(C.DELTA).cum_sum().alias(C.TOTAL_QUANTITY))
-            .select([C.TIMESTAMP, C.TOTAL_QUANTITY])
+            #    Walk forward in time to determine the total count PER QUANTITY_TYPE.
+            .with_columns(
+                pl.col(C.DELTA).cum_sum().over(C.QUANTITY_TYPE).alias(C.COUNT),
+            )
+            .select([C.TIMESTAMP, C.QUANTITY_TYPE, C.COUNT])
         )

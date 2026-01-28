@@ -5,10 +5,10 @@
 
 resources:
   physical_host:
-    sources: []
+    sources: ["nova.computenodes","nova.services"]
     depends_on: null
   reservable_host:
-    sources: []
+    sources: ["blazar.computehost"]
     depends_on: "physical_host"
   committed_allocation:
     sources: []

@@ -5,6 +5,15 @@ Constants defined in one place for reuse.
 
 class Sources:
     NOVA = "nova"
+    BLAZAR = "blazar"
+
+
+class QuantityTypes:
+    TOTAL = "total"
+    RESERVABLE = "reservable"
+    COMMITTED = "committed"
+    OCCUPIED = "occupied"
+    ACTIVE = "active"
 
 
 class States:
@@ -30,4 +39,5 @@ class Cols:
     VALUE = "value"
     PREV_VALUE = "prev_value"
     DELTA = "delta"
-    TOTAL_QUANTITY = "total_quantity"
+    QUANTITY_TYPE = "quantity_type"
+    COUNT = "count"

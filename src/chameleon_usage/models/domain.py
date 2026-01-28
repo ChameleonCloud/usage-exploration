@@ -9,6 +9,7 @@ class FactSchema(pa.DataFrameModel):
     entity_id: str
     value: str = pa.Field(nullable=True)  # Null = Reset/Delete
     source: str
+    quantity_type: str
 
 
 # Ourput of timeline builder:
@@ -16,9 +17,11 @@ class FactSchema(pa.DataFrameModel):
 class TimelineSchema(pa.DataFrameModel):
     timestamp: pl.Datetime
     entity_id: str
+    quantity_type: str
     final_state: str
 
 
 class UsageSchema(pa.DataFrameModel):
     timestamp: pl.Datetime
-    total_quantity: str
+    quantity_type: str
+    count: int
