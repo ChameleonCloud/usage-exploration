@@ -82,3 +82,33 @@ class TimelineBuilder:
             )
             .select([C.TIMESTAMP, C.QUANTITY_TYPE, C.COUNT])
         )
+
+    def resample_time_weighted(
+        self, usage: pl.LazyFrame, interval: str = "1d"
+    ) -> pl.LazyFrame:
+        return (
+            usage
+            .sort([C.QUANTITY_TYPE, C.TIMESTAMP])
+            .with_columns(
+                pl.col(C.TIMESTAMP)
+                .shift(-1)
+                .over(C.QUANTITY_TYPE)
+                .alias("next_timestamp")
+            )
+            .with_columns(
+                (pl.col("next_timestamp") - pl.col(C.TIMESTAMP))
+                .dt.total_seconds()
+                .alias("duration_seconds")
+            )
+            .filter(pl.col("duration_seconds").is_not_null())
+            .with_columns(
+                pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket")
+            )
+            .group_by(["bucket", C.QUANTITY_TYPE])
+            .agg(
+                (pl.col(C.COUNT) * pl.col("duration_seconds")).sum()
+                / pl.col("duration_seconds").sum()
+            )
+            .rename({"bucket": C.TIMESTAMP})
+            .sort([C.QUANTITY_TYPE, C.TIMESTAMP])
+        )

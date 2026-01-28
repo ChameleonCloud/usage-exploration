@@ -77,15 +77,19 @@ def run_demo():
 
     concurrent = engine.calculate_concurrency(timeline)
     print(f"Concurrent: {concurrent.collect().shape}")
-    output = concurrent.collect()
-    print(output)
+    print(concurrent.collect())
 
-    fig = output.plot.line(
+    resampled = engine.resample_time_weighted(concurrent, interval="30d")
+    print(f"Resampled: {resampled.collect().shape}")
+    print(resampled.collect())
+
+    plottable = resampled.collect()
+    fig = plottable.plot.line(
         x=C.TIMESTAMP,
         y=C.COUNT,
         color=C.QUANTITY_TYPE,
     ).encode(
-        x=alt.X(C.TIMESTAMP, scale=alt.Scale(domain=["2015-01-01", "2026-01-01"])),
+        x=alt.X(C.TIMESTAMP, scale=alt.Scale(domain=["2015-01-01", "2025-10-01"])),
         # y=alt.Y(C.COUNT, scale=alt.Scale(domain=[-100, 1000])),
     )
     fig.save("temp.png")
