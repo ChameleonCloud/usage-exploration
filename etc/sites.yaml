@@ -2,7 +2,7 @@
 
 chi_tacc:
   site_name: "CHI@TACC"
-  raw_spans: 'output/raw_spans/chi_tacc'
+  raw_spans: 'data/raw_spans/chi_tacc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3307/nova"
     nova_api: "mysql://root:root@127.0.0.1:3307/nova_api"
@@ -11,7 +11,7 @@ chi_tacc:
 
 chi_uc:
   site_name: "CHI@UC"
-  raw_spans: 'output/raw_spans/chi_uc'
+  raw_spans: 'data/raw_spans/chi_uc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3309/nova"
     nova_api: "mysql://root:root@127.0.0.1:3309/nova_api"
@@ -20,7 +20,7 @@ chi_uc:
 
 kvm_tacc:
   site_name: "KVM@TACC"
-  raw_spans: 'output/raw_spans/kvm_tacc'
+  raw_spans: 'data/raw_spans/kvm_tacc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3308/nova"
     nova_api: "mysql://root:root@127.0.0.1:3308/nova_api"
@@ -28,7 +28,7 @@ kvm_tacc:
 
 # chi_edge:
 #   site_name: "CHI@Edge"
-#   raw_spans: 'output/raw_spans/chi_edge'
+#   raw_spans: 'data/raw_spans/chi_edge'
 #   db_uris:
 #     blazar: "mysql://root:root@127.0.0.1:3310/blazar"
 #     zun: "mysql://root:root@127.0.0.1:3310/zun"

@@ -5,7 +5,7 @@ import pandera as pa
 import polars as pl
 
 from chameleon_usage import schemas
-from chameleon_usage.utils import SiteConfig
+from chameleon_usage.common import SiteConfig
 
 MAX_DATE = pl.datetime(2099, 12, 31)
 
@@ -59,6 +59,12 @@ class RawSpansLoader:
     def legacy_usage(self) -> pl.LazyFrame:
         return schemas.NodeUsageReportCache.validate(
             self._load("chameleon_usage", "node_usage_report_cache")
+        )
+
+    @property
+    def legacy_node_counts(self) -> pl.LazyFrame:
+        return schemas.NodeCountCache.validate(
+            self._load("chameleon_usage", "node_count_cache")
         )
 
 

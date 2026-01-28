@@ -67,6 +67,12 @@ class NodeUsageReportCache(pa.DataFrameModel):
     total_hours: float = pa.Field(coerce=True)
 
 
+class NodeCountCache(pa.DataFrameModel):
+    date: pl.Date = pa.Field(coerce=True)
+    node_type: str = pa.Field()
+    cnt: int = pa.Field(coerce=True)
+
+
 ################################################
 # Used for transforming source tables into spans
 ################################################

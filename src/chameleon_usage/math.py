@@ -63,17 +63,51 @@ def sweepline(events: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def resample_steps(
+def add_interval_duration(
     timeline: pl.LazyFrame,
     time_col: str = "timestamp",
-    series_col: str = "source",
-    value_col: str = "concurrent",
-    every: str = "1d",
+    end_col: str = "interval_end",
 ) -> pl.LazyFrame:
+    """Add duration column (in seconds) for each interval in a step function."""
+    return timeline.filter(pl.col(end_col).is_not_null()).with_columns(
+        duration=(pl.col(end_col) - pl.col(time_col)).dt.total_seconds()
+    )
+
+
+def resample_mean(
+    df: pl.LazyFrame,
+    time_col: str,
+    value_col: str,
+    every: str,
+    group_by: str | None = None,
+) -> pl.LazyFrame:
+    """Resample using simple mean within each bucket."""
     return (
-        timeline.sort([series_col, time_col])
-        .group_by_dynamic(time_col, every=every, group_by=series_col)
-        .agg(pl.col(value_col).last().alias(value_col))
+        df.sort([group_by, time_col] if group_by else [time_col])
+        .group_by_dynamic(time_col, every=every, group_by=group_by)
+        .agg(pl.col(value_col).mean().alias(value_col))
+        .sort(time_col)
+    )
+
+
+def resample_weighted_mean(
+    df: pl.LazyFrame,
+    time_col: str,
+    value_col: str,
+    weight_col: str,
+    every: str,
+    group_by: str | None = None,
+) -> pl.LazyFrame:
+    """Resample using weighted mean: sum(value * weight) / sum(weight)."""
+    return (
+        df.sort([group_by, time_col] if group_by else [time_col])
+        .group_by_dynamic(time_col, every=every, group_by=group_by)
+        .agg(
+            (pl.col(value_col) * pl.col(weight_col)).sum().alias("_weighted_sum"),
+            pl.col(weight_col).sum().alias("_total_weight"),
+        )
+        .with_columns((pl.col("_weighted_sum") / pl.col("_total_weight")).alias(value_col))
+        .drop("_weighted_sum", "_total_weight")
         .sort(time_col)
     )
 
@@ -81,18 +115,43 @@ def resample_steps(
 def sweepline_to_wide(
     timeline: pl.LazyFrame,
     time_col: str = "timestamp",
+    end_col: str = "interval_end",
     series_col: str = "source",
     value_col: str = "concurrent",
     every: str = "1d",
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
 ) -> pl.DataFrame:
-    daily = resample_steps(
-        timeline,
+    """Resample step function using time-weighted average and pivot to wide format."""
+    lf = timeline
+    if window_end is not None:
+        lf = lf.with_columns(pl.col(end_col).fill_null(pl.lit(window_end)))
+    if window_start is not None:
+        lf = lf.with_columns(
+            pl.when(pl.col(time_col) < window_start)
+            .then(pl.lit(window_start))
+            .otherwise(pl.col(time_col))
+            .alias(time_col)
+        )
+    if window_end is not None:
+        lf = lf.with_columns(
+            pl.when(pl.col(end_col) > window_end)
+            .then(pl.lit(window_end))
+            .otherwise(pl.col(end_col))
+            .alias(end_col)
+        )
+    lf = lf.filter(pl.col(end_col).is_not_null() & (pl.col(end_col) > pl.col(time_col)))
+
+    with_duration = add_interval_duration(lf, time_col=time_col, end_col=end_col)
+    resampled = resample_weighted_mean(
+        with_duration,
         time_col=time_col,
-        series_col=series_col,
         value_col=value_col,
+        weight_col="duration",
         every=every,
+        group_by=series_col,
     ).collect()
-    wide = daily.pivot(
+    wide = resampled.pivot(
         on=series_col,
         index=time_col,
         values=value_col,

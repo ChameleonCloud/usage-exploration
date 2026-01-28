@@ -3,7 +3,7 @@ import warnings
 
 import ibis
 
-from chameleon_usage.utils import SiteConfig
+from chameleon_usage.common import SiteConfig
 
 TABLES = {
     "blazar": [

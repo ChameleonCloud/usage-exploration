@@ -1,22 +1,19 @@
-from dataclasses import dataclass
-
 import polars as pl
 
-from chameleon_usage import plots, spans, utils
-from chameleon_usage.utils import SiteConfig
-
-
-@dataclass
-class PipelineOutput:
-    valid_spans: pl.LazyFrame
-    audit_spans: pl.LazyFrame
-    raw_spans: pl.LazyFrame
+from chameleon_usage import spans
+from chameleon_usage.common import PipelineOutput, SiteConfig
 
 
 class UsagePipeline:
     def __init__(self, site_conf: SiteConfig):
         self.site_conf = site_conf
         self.span_loader = spans.RawSpansLoader(self.site_conf)
+        self.legacy_usage_counts = pl.LazyFrame()
+
+    # TODO: properly compute self.legacy_usage_counts from hours and node counts
+    def load_legacy_usage(self) -> None:
+        self.legacy_usage = self.span_loader.legacy_usage
+        self.legacy_counts = self.span_loader.legacy_node_counts
 
     def compute_spans(self) -> PipelineOutput:
         """
@@ -46,29 +43,5 @@ class UsagePipeline:
             valid_spans=pl.concat(valids),
             audit_spans=pl.concat(audits, how="diagonal"),
             raw_spans=pl.concat(raws, how="diagonal"),
+            legacy_usage=self.legacy_usage_counts,
         )
-
-
-def main():
-    print("Loading Tables")
-    site_yaml = utils.load_sites_yaml("etc/sites.yaml")
-
-    # results = {
-    #     site.site_name: loader.dump_site_to_parquet(site) for site in site_yaml.values()
-    # }
-    # utils.print_summary(results)
-
-    tacc_spans = UsagePipeline(site_yaml["chi_tacc"])
-    legacy = tacc_spans.span_loader.legacy_usage.collect()
-    plots.plot_legacy_usage(legacy).show()
-
-    # usage, audit = tacc_spans.compute_spans()
-
-    # # Print the DataFrame with increased column visibility and width
-    # with pl.Config(tbl_cols=20, tbl_width_chars=2000):
-    #     print(usage.collect())
-    #     print(audit.collect())
-
-
-if __name__ == "__main__":
-    main()

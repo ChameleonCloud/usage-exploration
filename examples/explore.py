@@ -5,7 +5,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import polars as pl
 
-from chameleon_usage import audit, math, utils
+from chameleon_usage import audit, math
+from chameleon_usage.common import SiteConfig, load_sites_yaml, merge_pipelines
 from chameleon_usage.dump_db import dump_site_to_parquet
 from chameleon_usage.pipeline import UsagePipeline
 
@@ -30,11 +31,50 @@ def _spans_to_daily_wide(
     lf = math.filter_overlapping(lf, "start", "end", window_start, window_end)
     events = math.spans_to_events(lf, group_cols=[series_col])
     timeline = math.sweepline(events)
-    timeline = math.clip_timeline(timeline, "timestamp", window_start, window_end)
-    return math.sweepline_to_wide(timeline, series_col=series_col, every=every)
+    return math.sweepline_to_wide(
+        timeline,
+        series_col=series_col,
+        every=every,
+        window_start=window_start,
+        window_end=window_end,
+    )
 
 
-def _plot_site(daily_wide: pl.DataFrame, site_name: str, plot_dir: Path) -> None:
+def _resample_legacy_counts(
+    legacy_df: pl.DataFrame,
+    site_name: str,
+    every: str,
+) -> pl.DataFrame | None:
+    """Resample legacy node counts to same interval as new data.
+
+    Legacy data has daily counts per node_type. We:
+    1. Sum across node_types to get daily total
+    2. Resample using mean (for daily data, mean == time-weighted average)
+    """
+    legacy_site = legacy_df.filter(pl.col("site") == site_name)
+    if legacy_site.height == 0:
+        return None
+
+    # Sum across node_types per day
+    daily_totals = (
+        legacy_site.lazy()
+        .group_by("date")
+        .agg(pl.col("cnt").sum().alias("legacy_total"))
+    )
+    # Resample using mean
+    return math.resample_mean(
+        daily_totals, time_col="date", value_col="legacy_total", every=every
+    ).collect()
+
+
+def _plot_site(
+    daily_wide: pl.DataFrame,
+    legacy_df: pl.DataFrame | None,
+    site_name: str,
+    plot_dir: Path,
+    every: str = "30d",
+) -> None:
+    """Plot new data with legacy overlay for comparison."""
     site_cols = [
         c
         for c in daily_wide.columns
@@ -42,19 +82,28 @@ def _plot_site(daily_wide: pl.DataFrame, site_name: str, plot_dir: Path) -> None
     ]
     if len(site_cols) <= 1:
         return
-    site_df = daily_wide.select(site_cols)
-    (
-        site_df.to_pandas()
-        .set_index("timestamp")
-        .sort_index()
-        .plot(title=f"{site_name} daily concurrent spans")
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot new data (solid lines)
+    site_df = (
+        daily_wide.select(site_cols).to_pandas().set_index("timestamp").sort_index()
     )
+    site_df.plot(ax=ax, title=f"{site_name}: new (solid) vs legacy (dashed)")
+
+    # Overlay legacy data if available (dashed lines)
+    if legacy_df is not None:
+        legacy_resampled = _resample_legacy_counts(legacy_df, site_name, every)
+        if legacy_resampled is not None:
+            legacy_pd = legacy_resampled.to_pandas().set_index("date")
+            legacy_pd.plot(ax=ax, linestyle="--", alpha=0.7)
+
     plt.tight_layout()
     plt.savefig(plot_dir / f"{site_name}_daily_sources.png", dpi=150)
     plt.close()
 
 
-def load_site(site: utils.SiteConfig):
+def load_site(site: SiteConfig):
     print(f"Processing {site.site_name}")
 
     print("Syncing DB to parquet cache...")
@@ -67,13 +116,7 @@ def load_site(site: utils.SiteConfig):
     pipeline = UsagePipeline(site)
     pipelineresult = pipeline.compute_spans()
 
-    try:
-        legacy = pipeline.span_loader.legacy_usage
-    except FileNotFoundError:
-        print(f"Couldn't load legacy data for {site.site_name}, skipping.")
-        legacy = pl.LazyFrame()
-
-    return pipelineresult, legacy
+    return pipelineresult
 
 
 def parse_args():
@@ -87,7 +130,7 @@ def parse_args():
 def main():
     args = parse_args()
 
-    sites = utils.load_sites_yaml(args.sites_config)
+    sites = load_sites_yaml(args.sites_config)
 
     # Override raw_spans path if provided
     if args.raw_spans:
@@ -99,39 +142,25 @@ def main():
     plot_dir = output_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
+    # Load, audit, and collect data from each site
+    pipeline_results = {}
+    for site_name, site_config in sites.items():
+        pipeline_results[site_name] = load_site(site_config)
+
+    merged = merge_pipelines(pipeline_results)
+
+    # Run audit checks and output report
+    audit_result = audit.run_audit_checks(merged)
+
+    audit_results_dir = output_dir / "audit"
+    audit_results_dir.mkdir(parents=True, exist_ok=True)
+    audit_result.write_csv(file=audit_results_dir / "report.csv")
+    print(audit_result)
+
     window_start = datetime(2010, 1, 1)
     window_end = datetime(2025, 1, 1)
-
-    # Load, audit, and collect data from each site
-    all_valid = []
-    all_legacy = []
-    for site_name, site_config in sites.items():
-        pipelineresult, legacy_df = load_site(site_config)
-
-        # Collect per-site data
-        raw_df = pipelineresult.raw_spans.collect()
-        valid_df = pipelineresult.valid_spans.collect()
-        audit_df = pipelineresult.audit_spans.collect()
-
-        # Run audit checks per-site (includes row + hour invariants)
-        audit.run_site_audit(
-            raw_df,
-            valid_df,
-            audit_df,
-            site=site_name,
-            window_start=window_start,
-            window_end=window_end,
-            output_dir=output_dir,
-        )
-
-        # Accumulate for combined processing
-        all_valid.append(valid_df.with_columns(site=pl.lit(site_name)))
-        all_legacy.append(legacy_df.with_columns(site=pl.lit(site_name)))
-
-    # Combine all sites for plotting
-    valid_spans = pl.concat(all_valid)
     daily_wide = _spans_to_daily_wide(
-        valid_spans,
+        merged.valid_spans.collect(),
         window_start=window_start,
         window_end=window_end,
         group_cols=["site", "source"],  # ensure grouping by both site and span source
@@ -139,7 +168,7 @@ def main():
     )
 
     for site_name in sites.keys():
-        _plot_site(daily_wide, site_name, plot_dir)
+        _plot_site(daily_wide, None, site_name, plot_dir)
         print(f"saved {site_name} plots to: {plot_dir}")
 
 
