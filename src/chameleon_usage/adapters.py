@@ -6,7 +6,14 @@ from pandera.typing.polars import LazyFrame as LazyGeneric
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes, Sources, States
 from chameleon_usage.models.domain import FactSchema
-from chameleon_usage.models.raw import BlazarHostRaw, NovaHostRaw
+from chameleon_usage.models.raw import (
+    BlazarAllocationRaw,
+    BlazarHostRaw,
+    BlazarLeaseRaw,
+    BlazarReservationRaw,
+    NovaHostRaw,
+    NovaInstanceRaw,
+)
 
 
 class BaseAdapter(ABC):
@@ -91,6 +98,75 @@ class BlazarComputehostAdapter(BaseAdapter):
                 pl.col(BlazarHostRaw.deleted_at).alias(C.DELETED_AT),
                 pl.lit(Sources.BLAZAR).alias(C.SOURCE),
             ]
+        )
+
+        starts = base.select(
+            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
+            pl.col(C.ENTITY_ID),
+            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
+            pl.lit(States.ACTIVE).alias(C.VALUE),
+            pl.col(C.SOURCE),
+        )
+        ends = base.select(
+            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
+            pl.col(C.ENTITY_ID),
+            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
+            pl.lit(States.DELETED).alias(C.VALUE),
+            pl.col(C.SOURCE),
+        )
+
+        combined = pl.concat([starts, ends])
+
+        return FactSchema.validate(combined)
+
+
+class BlazarAllocationAdapter(BaseAdapter):
+    """
+    Takes input values from nova computenode table and generates facts.
+    """
+
+    quantity_type = QuantityTypes.COMMITTED
+
+    def __init__(
+        self,
+        alloc: LazyGeneric[BlazarAllocationRaw],
+        res: LazyGeneric[BlazarReservationRaw],
+        lease: LazyGeneric[BlazarLeaseRaw],
+    ):
+        self.alloc = alloc
+        self.res = res
+        self.lease = lease
+
+    def to_facts(self) -> LazyGeneric[FactSchema]:
+        """
+        Generates 2 Facts from each row:
+        1. Created At -> Value: "active" , timestamp
+        2. Deleted At -> Value: "null" , timestamp
+        """
+
+        base = (
+            self.alloc.join(
+                self.res,
+                left_on=BlazarAllocationRaw.reservation_id,
+                right_on=BlazarReservationRaw.id,
+                how="left",
+                suffix="_res",
+            )
+            .join(
+                self.lease,
+                left_on=BlazarReservationRaw.lease_id,
+                right_on=BlazarLeaseRaw.id,
+                how="left",
+                suffix="_lease",
+            )
+            .select(
+                [
+                    pl.col(BlazarAllocationRaw.id).alias(C.ENTITY_ID),
+                    pl.col(BlazarLeaseRaw.start_date).alias(C.CREATED_AT),
+                    pl.col(BlazarLeaseRaw.end_date).alias(C.DELETED_AT),
+                    pl.lit(Sources.BLAZAR).alias(C.SOURCE),
+                ]
+            )
         )
 
         starts = base.select(

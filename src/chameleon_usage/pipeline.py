@@ -2,30 +2,66 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.adapters import BlazarComputehostAdapter, NovaComputeAdapter
+from chameleon_usage.adapters import (
+    BlazarAllocationAdapter,
+    BlazarComputehostAdapter,
+    NovaComputeAdapter,
+)
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.engine import TimelineBuilder
-from chameleon_usage.models.domain import TimelineSchema, UsageSchema
-from chameleon_usage.models.raw import BlazarHostRaw, NovaHostRaw
+from chameleon_usage.models.raw import (
+    BlazarAllocationRaw,
+    BlazarHostRaw,
+    BlazarLeaseRaw,
+    BlazarReservationRaw,
+    NovaHostRaw,
+    NovaInstanceRaw,
+)
 
 
 def run_demo():
     # get data
 
-    nova_adapter = NovaComputeAdapter(
-        NovaHostRaw.validate(
-            pl.scan_parquet("data/raw_spans/chi_tacc/nova.compute_nodes.parquet")
-        )
-    )
-    nova_facts = nova_adapter.to_facts()
-    blazar_adapter = BlazarComputehostAdapter(
-        BlazarHostRaw.validate(
-            pl.scan_parquet("data/raw_spans/chi_tacc/blazar.computehosts.parquet")
-        )
-    )
-    blazar_facts = blazar_adapter.to_facts()
+    all_facts = []
 
-    facts = pl.concat([nova_facts, blazar_facts])
+    all_facts.append(
+        NovaComputeAdapter(
+            NovaHostRaw.validate(
+                pl.scan_parquet("data/raw_spans/chi_tacc/nova.compute_nodes.parquet")
+            )
+        ).to_facts()
+    )
+    # all_facts.append(
+    #     NovaComputeAdapter(
+    #         NovaHostRaw.validate(
+    #             pl.scan_parquet("data/raw_spans/chi_tacc/nova.compute_nodes.parquet")
+    #         )
+    #     ).to_facts()
+    # )
+    all_facts.append(
+        BlazarComputehostAdapter(
+            BlazarHostRaw.validate(
+                pl.scan_parquet("data/raw_spans/chi_tacc/blazar.computehosts.parquet")
+            )
+        ).to_facts()
+    )
+
+    blazardata = [
+        BlazarAllocationRaw.validate(
+            pl.scan_parquet(
+                "data/raw_spans/chi_tacc/blazar.computehost_allocations.parquet"
+            )
+        ),
+        BlazarReservationRaw.validate(
+            pl.scan_parquet("data/raw_spans/chi_tacc/blazar.reservations.parquet")
+        ),
+        BlazarLeaseRaw.validate(
+            pl.scan_parquet("data/raw_spans/chi_tacc/blazar.leases.parquet")
+        ),
+    ]
+    all_facts.append(BlazarAllocationAdapter(*blazardata).to_facts())
+
+    facts = pl.concat(all_facts)
     print(f"Facts: {facts.collect().shape}")
     print(facts.collect())
 
