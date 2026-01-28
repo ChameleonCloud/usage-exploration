@@ -84,13 +84,17 @@ def run_demo():
     print(resampled.collect())
 
     plottable = resampled.collect()
-    fig = plottable.plot.line(
-        x=C.TIMESTAMP,
-        y=C.COUNT,
-        color=C.QUANTITY_TYPE,
-    ).encode(
-        x=alt.X(C.TIMESTAMP, scale=alt.Scale(domain=["2015-01-01", "2025-10-01"])),
-        # y=alt.Y(C.COUNT, scale=alt.Scale(domain=[-100, 1000])),
+    fig = (
+        plottable.plot.line(
+            x=C.TIMESTAMP,
+            y=C.COUNT,
+            color=C.QUANTITY_TYPE,
+        )
+        .encode(
+            x=alt.X(C.TIMESTAMP, scale=alt.Scale(domain=["2015-01-01", "2025-10-01"])),
+            # y=alt.Y(C.COUNT, scale=alt.Scale(domain=[-100, 1000])),
+        )
+        .properties(width=900, height=600)
     )
     fig.save("temp.png")
 

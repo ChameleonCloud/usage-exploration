@@ -87,8 +87,7 @@ class TimelineBuilder:
         self, usage: pl.LazyFrame, interval: str = "1d"
     ) -> pl.LazyFrame:
         return (
-            usage
-            .sort([C.QUANTITY_TYPE, C.TIMESTAMP])
+            usage.sort([C.QUANTITY_TYPE, C.TIMESTAMP])
             .with_columns(
                 pl.col(C.TIMESTAMP)
                 .shift(-1)
@@ -101,9 +100,7 @@ class TimelineBuilder:
                 .alias("duration_seconds")
             )
             .filter(pl.col("duration_seconds").is_not_null())
-            .with_columns(
-                pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket")
-            )
+            .with_columns(pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket"))
             .group_by(["bucket", C.QUANTITY_TYPE])
             .agg(
                 (pl.col(C.COUNT) * pl.col("duration_seconds")).sum()
