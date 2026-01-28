@@ -1,5 +1,19 @@
 # Chameleon Usage Reporting 2026
 
+File Layout:
+
+src/
+└── chameleon_usage/
+    ├── __init__.py
+    ├── constants.py        # Enums & Column Names
+    ├── dump_db.py          # Imports mysql db tables to parquet
+    ├── models.py            # Schemas & Data Classes
+    ├── adapters.py          # Ingestion Logic (Loaders)
+    ├── config.yaml          # "Rules as Data" Resource Model
+    ├── engine.py            # Synthesis Logic (Painter's Algo)
+    └── pipeline.py          # Orchestration Glue
+
+
 
 ## Data Model
 

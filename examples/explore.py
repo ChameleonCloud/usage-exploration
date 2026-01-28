@@ -4,10 +4,10 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import polars as pl
+from chameleon_usage.common import SiteConfig, load_sites_yaml, merge_pipelines
 
 from chameleon_usage import audit, math
-from chameleon_usage.common import SiteConfig, load_sites_yaml, merge_pipelines
-from chameleon_usage.dump_db import dump_site_to_parquet
+from chameleon_usage.data_import.dump_db import dump_site_to_parquet
 from chameleon_usage.pipeline import UsagePipeline
 
 

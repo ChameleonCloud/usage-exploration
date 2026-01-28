@@ -4,8 +4,8 @@ from pathlib import Path
 import pandera as pa
 import polars as pl
 
-from chameleon_usage import schemas
 from chameleon_usage.common import SiteConfig
+from chameleon_usage.models import domain
 
 MAX_DATE = pl.datetime(2099, 12, 31)
 
@@ -25,45 +25,45 @@ class RawSpansLoader:
 
     @property
     def blazar_hosts(self) -> pl.LazyFrame:
-        return schemas.BlazarHostRaw.validate(self._load("blazar", "computehosts"))
+        return domain.BlazarHostRaw.validate(self._load("blazar", "computehosts"))
 
     @property
     def blazar_allocations(self) -> pl.LazyFrame:
-        return schemas.BlazarAllocationRaw.validate(
+        return domain.BlazarAllocationRaw.validate(
             self._load("blazar", "computehost_allocations")
         )
 
     @property
     def blazar_leases(self) -> pl.LazyFrame:
-        return schemas.BlazarLeaseRaw.validate(self._load("blazar", "leases"))
+        return domain.BlazarLeaseRaw.validate(self._load("blazar", "leases"))
 
     @property
     def blazar_reservations(self) -> pl.LazyFrame:
-        return schemas.BlazarReservationRaw.validate(
+        return domain.BlazarReservationRaw.validate(
             self._load("blazar", "reservations")
         )
 
     @property
     def nova_computenodes(self) -> pl.LazyFrame:
-        return schemas.NovaHostRaw.validate(self._load("nova", "compute_nodes"))
+        return domain.NovaHostRaw.validate(self._load("nova", "compute_nodes"))
 
     @property
     def nova_instances(self) -> pl.LazyFrame:
-        return schemas.NovaInstanceRaw.validate(self._load("nova", "instances"))
+        return domain.NovaInstanceRaw.validate(self._load("nova", "instances"))
 
     @property
     def nova_services(self) -> pl.LazyFrame:
-        return schemas.NovaServiceRaw.validate(self._load("nova", "services"))
+        return domain.NovaServiceRaw.validate(self._load("nova", "services"))
 
     @property
     def legacy_usage(self) -> pl.LazyFrame:
-        return schemas.NodeUsageReportCache.validate(
+        return domain.NodeUsageReportCache.validate(
             self._load("chameleon_usage", "node_usage_report_cache")
         )
 
     @property
     def legacy_node_counts(self) -> pl.LazyFrame:
-        return schemas.NodeCountCache.validate(
+        return domain.NodeCountCache.validate(
             self._load("chameleon_usage", "node_count_cache")
         )
 
@@ -123,7 +123,7 @@ class BaseSpanSource(ABC):
         self._require_columns(raw, self.required_colums, self.source_name)
         # validate that columns exist
         try:
-            raw = schemas.RawEventBase.validate(raw, lazy=True)
+            raw = domain.RawEventBase.validate(raw, lazy=True)
         except pa.errors.SchemaErrors as e:
             raise ValueError(
                 f"{self.source_name}: RawEventBase failed\n{e.failure_cases}"

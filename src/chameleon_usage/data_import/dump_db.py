@@ -1,3 +1,7 @@
+"""
+Module: Dumps Openstack Mysql to parquet files.
+"""
+
 import os
 import warnings
 

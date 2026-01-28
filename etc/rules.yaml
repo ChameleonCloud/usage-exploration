@@ -1,0 +1,30 @@
+---
+# Declarative rules for data reconstruction.
+# Defines source priority order per span type: data priority rules
+# Defines heirarchy order for constraints
+
+resources:
+  physical_host:
+    sources: []
+    depends_on: null
+  reservable_host:
+    sources: []
+    depends_on: "physical_host"
+  committed_allocation:
+    sources: []
+    depends_on: "reservable_host"
+  reserved_instance_occupied:
+    sources: []
+    depends_on: "committed_allocation"
+  reserved_instance_active:
+    sources: []
+    depends_on: "committed_allocation"
+  ondemand_host:
+    sources: []
+    depends_on: "physical_host"
+  ondemand_instance_occupied:
+    sources: []
+    depends_on: "ondemand_host"
+  ondemand_instance_active:
+    sources: []
+    depends_on: "ondemand_instance_occupied"

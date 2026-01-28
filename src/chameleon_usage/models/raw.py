@@ -1,5 +1,12 @@
+"""Pandera schemas for raw input tables.
+
+Names necessary columns, minimal type coercion only.
+"""
+
 import pandera.polars as pa
 import polars as pl
+
+from chameleon_usage.constants import Cols as C
 
 
 class BlazarHostRaw(pa.DataFrameModel):
@@ -71,19 +78,3 @@ class NodeCountCache(pa.DataFrameModel):
     date: pl.Date = pa.Field(coerce=True)
     node_type: str = pa.Field()
     cnt: int = pa.Field(coerce=True)
-
-
-################################################
-# Used for transforming source tables into spans
-################################################
-class RawEventBase(pa.DataFrameModel):
-    entity_id: str = pa.Field()
-    start_date: pl.Datetime = pa.Field(coerce=True)
-    hypervisor_hostname: str = pa.Field(nullable=True)
-
-
-class CanonicalSpan(pa.DataFrameModel):
-    resource_id: str = pa.Field()
-    start: pl.Datetime = pa.Field(coerce=True)
-    end: pl.Datetime = pa.Field(coerce=True)
-    source: str = pa.Field()

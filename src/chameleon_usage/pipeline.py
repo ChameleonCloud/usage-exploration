@@ -1,47 +1,27 @@
+from datetime import datetime
+
 import polars as pl
 
-from chameleon_usage import spans
-from chameleon_usage.common import PipelineOutput, SiteConfig
+from chameleon_usage.adapters import NovaComputeAdapter
+from chameleon_usage.engine import SegmentBuilder
+from chameleon_usage.models.raw import NovaHostRaw
 
 
-class UsagePipeline:
-    def __init__(self, site_conf: SiteConfig):
-        self.site_conf = site_conf
-        self.span_loader = spans.RawSpansLoader(self.site_conf)
-        self.legacy_usage_counts = pl.LazyFrame()
+def run_demo():
+    # get data
+    raw_nodes = pl.scan_parquet("data/raw_spans/chi_tacc/nova.compute_nodes.parquet")
+    validated = NovaHostRaw.validate(raw_nodes)
 
-    # TODO: properly compute self.legacy_usage_counts from hours and node counts
-    def load_legacy_usage(self) -> None:
-        self.legacy_usage = self.span_loader.legacy_usage
-        self.legacy_counts = self.span_loader.legacy_node_counts
+    # 2. Adapt
+    adapter = NovaComputeAdapter(validated.lazy())
+    facts = adapter.to_facts()
 
-    def compute_spans(self) -> PipelineOutput:
-        """
-        Orchestrates the loading, cleaning, and stacking of all span types.
-        """
-        sources: list[spans.BaseSpanSource] = [
-            spans.NovaHostSource(self.span_loader),
-            spans.BlazarHostSource(self.span_loader),  # when you add it
-            spans.BlazarCommitmentSource(self.span_loader),
-            spans.NovaOccupiedSource(self.span_loader),
-        ]
+    # 3. Build
+    engine = SegmentBuilder()
+    result = engine.build(facts)
 
-        valids: list[pl.LazyFrame] = []
-        audits: list[pl.LazyFrame] = []
-        raws: list[pl.LazyFrame] = []
-        for src in sources:
-            v, a = src.get_spans()
-            valids.append(v)
-            audits.append(a)
+    print(result.collect())
 
-            # each span source provides a lazy fetcher for the source data
-            # TODO: store on the span loader instance as instance variable??
-            r = src.get_raw_events()
-            raws.append(r.with_columns(source=pl.lit(src.source_name)))
 
-        return PipelineOutput(
-            valid_spans=pl.concat(valids),
-            audit_spans=pl.concat(audits, how="diagonal"),
-            raw_spans=pl.concat(raws, how="diagonal"),
-            legacy_usage=self.legacy_usage_counts,
-        )
+if __name__ == "__main__":
+    run_demo()
