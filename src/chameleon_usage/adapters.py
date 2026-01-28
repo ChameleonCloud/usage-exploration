@@ -161,9 +161,18 @@ class BlazarAllocationAdapter(BaseAdapter):
             )
             .select(
                 [
-                    pl.col(BlazarAllocationRaw.id).alias(C.ENTITY_ID),
-                    pl.col(BlazarLeaseRaw.start_date).alias(C.CREATED_AT),
-                    pl.col(BlazarLeaseRaw.end_date).alias(C.DELETED_AT),
+                    pl.col("compute_host_id").alias(C.ENTITY_ID),
+                    pl.min_horizontal(
+                        pl.max_horizontal(
+                            pl.col("start_date"),
+                            pl.col("created_at_lease"),
+                        ),
+                        pl.col("deleted_at_lease"),
+                    ).alias(C.CREATED_AT),
+                    pl.min_horizontal(
+                        pl.col("end_date"),
+                        pl.col("deleted_at_lease"),
+                    ).alias(C.DELETED_AT),
                     pl.lit(Sources.BLAZAR).alias(C.SOURCE),
                 ]
             )

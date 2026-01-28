@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import altair as alt
 import polars as pl
 
 from chameleon_usage.adapters import (
@@ -59,6 +60,9 @@ def run_demo():
             pl.scan_parquet("data/raw_spans/chi_tacc/blazar.leases.parquet")
         ),
     ]
+
+    print(blazardata[2].collect().describe())
+
     all_facts.append(BlazarAllocationAdapter(*blazardata).to_facts())
 
     facts = pl.concat(all_facts)
@@ -76,7 +80,14 @@ def run_demo():
     output = concurrent.collect()
     print(output)
 
-    fig = output.plot.line(x=C.TIMESTAMP, y=C.COUNT, color=C.QUANTITY_TYPE)
+    fig = output.plot.line(
+        x=C.TIMESTAMP,
+        y=C.COUNT,
+        color=C.QUANTITY_TYPE,
+    ).encode(
+        x=alt.X(C.TIMESTAMP, scale=alt.Scale(domain=["2015-01-01", "2026-01-01"])),
+        # y=alt.Y(C.COUNT, scale=alt.Scale(domain=[-100, 1000])),
+    )
     fig.save("temp.png")
 
 
