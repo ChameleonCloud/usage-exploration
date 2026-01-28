@@ -3,7 +3,8 @@ from datetime import datetime
 import polars as pl
 
 from chameleon_usage.adapters import NovaComputeAdapter
-from chameleon_usage.engine import SegmentBuilder
+from chameleon_usage.engine import TimelineBuilder
+from chameleon_usage.models.domain import TimelineSchema, UsageSchema
 from chameleon_usage.models.raw import NovaHostRaw
 
 
@@ -16,11 +17,24 @@ def run_demo():
     adapter = NovaComputeAdapter(validated.lazy())
     facts = adapter.to_facts()
 
-    # 3. Build
-    engine = SegmentBuilder()
-    result = engine.build(facts)
+    print(f"Facts: {facts.collect().shape}")
+    print(facts.collect().head())
 
-    print(result.collect())
+    # 3. Build
+    engine = TimelineBuilder()
+    timeline = engine.build(facts)
+
+    print(f"Timeline: {timeline.collect().shape}")
+
+    concurrent = engine.calculate_concurrency(timeline)
+
+    print(f"Concurrent: {concurrent.collect().shape}")
+
+    output = concurrent.collect()
+    print(output)
+
+    fig = output.plot.line(x=UsageSchema.timestamp, y=UsageSchema.total_quantity)
+    fig.save("temp.png")
 
 
 if __name__ == "__main__":

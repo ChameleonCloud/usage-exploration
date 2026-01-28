@@ -9,6 +9,7 @@ class Sources:
 
 class States:
     ACTIVE = "active"
+    DELETED = "deleted"
 
 
 class Cols:
@@ -27,3 +28,6 @@ class Cols:
     SOURCE = "source"
     TIMESTAMP = "timestamp"
     VALUE = "value"
+    PREV_VALUE = "prev_value"
+    DELTA = "delta"
+    TOTAL_QUANTITY = "total_quantity"

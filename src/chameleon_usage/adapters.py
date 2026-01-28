@@ -42,7 +42,7 @@ class NovaComputeAdapter:
         ends = base.select(
             pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
             pl.col(C.ENTITY_ID),
-            pl.lit(None).cast(pl.Utf8).alias(C.VALUE),
+            pl.lit(States.DELETED).alias(C.VALUE),
             pl.col(C.SOURCE),
         )
 
