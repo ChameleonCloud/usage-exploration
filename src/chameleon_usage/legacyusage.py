@@ -74,7 +74,7 @@ class LegacyUsageLoader:
             (pl.col("reservable_hours") / self.HOURS_PER_DAY).alias(QT.RESERVABLE),
             (pl.col("committed_hours") / self.HOURS_PER_DAY).alias(QT.COMMITTED),
             (pl.col("occupied_hours") / self.HOURS_PER_DAY).alias(QT.OCCUPIED),
-            # (pl.col("occupied_hours") / self.HOURS_PER_DAY).alias(QT.ACTIVE),
+            ((pl.col("reservable_hours") - pl.col("committed_hours")) / self.HOURS_PER_DAY).alias(QT.AVAILABLE),
             (pl.col("idle_hours") / self.HOURS_PER_DAY).alias(QT.IDLE),
         )
 

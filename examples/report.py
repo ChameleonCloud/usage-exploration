@@ -6,6 +6,7 @@ import polars as pl
 
 from chameleon_usage.engine import SegmentBuilder
 from chameleon_usage.legacyusage import LegacyUsageLoader
+from chameleon_usage.models.domain import UsageSchema
 from chameleon_usage.pipeline import (
     compute_derived_metrics,
     load_facts,
@@ -20,43 +21,48 @@ WINDOW_END = datetime(2025, 11, 1)
 
 def main():
     for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
-        facts = load_facts(input_data="data/raw_spans", site_name=site_name)
-        facts.collect_schema()
+        ########################
+        # current usage pipeline
+        ########################
+        engine = SegmentBuilder(site_name=site_name, priority_order=[])
 
-        # legacy data (optional)
-        legacy_usage = None
+        # input to facts list
+        facts = load_facts(input_data="data/raw_spans", site_name=site_name)
+        # facts (thing, ts) -> segments [t1,t2)
+        segments = engine.build(facts)
+        # cumulative sum on segments -> ts, resource, counts
+        usage = engine.calculate_concurrency(segments, window_end=WINDOW_END)
+        # filter out results in the future
+        current_filtered = usage.filter(pl.col("timestamp") <= WINDOW_END)
+
+        # resample to consistent time steps across all columns
+        current_resampled = resample_simple(current_filtered, interval="30d")
+        current = compute_derived_metrics(UsageSchema.validate(current_resampled))
+
+        # legacy usage pipeline
+        legacy = None
         try:
             loader = LegacyUsageLoader("data/raw_spans", site_name)
             loader.load_facts()
-            legacy_usage = loader.get_usage()
-            legacy_usage.collect_schema()
+            legacy = (
+                loader.get_usage()
+                .filter(pl.col("timestamp") <= WINDOW_END)
+                .pipe(resample_simple, interval="30d")
+            )
         except FileNotFoundError:
             pass
 
-        # process facts → segments → usage
-        engine = SegmentBuilder(site_name=site_name, priority_order=[])
-        segments = engine.build(facts)
-        segments.collect_schema()
-
-        usage = engine.calculate_concurrency(segments, window_end=WINDOW_END)
-        usage.collect_schema()
-
-        usage_derived = compute_derived_metrics(usage)
-        usage_derived.collect_schema()
-
-        # combine with legacy if available
-        # ensure columns math
-        if legacy_usage is not None:
-            usage_merged = pl.concat([usage_derived, legacy_usage])
+        # merge
+        if legacy is not None:
+            resampled = pl.concat([current, legacy], how="diagonal")
         else:
-            usage_merged = usage_derived
+            resampled = current
 
-        filtered = usage_merged.filter(pl.col("timestamp") <= WINDOW_END)
-
-        # resample and compute derived metrics
-        resampled = resample_simple(filtered, interval="30d")
-        resampled.collect_schema()
-        print(resampled.collect())
+        print(
+            resampled.collect()
+            .group_by(["collector_type", "quantity_type"])
+            .agg(pl.col("count").count().alias("n_rows"))
+        )
 
         make_plots(resampled, output_path="output/plots/", site_name=site_name)
 

@@ -141,7 +141,7 @@ def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str)
         f"{output_path}/{site_name}.png", scale_factor=SCALE_FACTOR
     )
     usage_facet_plot(data_to_plot).save(
-        f"{output_path}/{site_name}_facet.png", scale_factor=SCALE_FACTOR
+        f"{output_path}/{site_name}_facet.png", scale_factor=SCALE_FACTOR * 2
     )
     stack_subset = data_to_plot.filter(pl.col("collector_type") == "current")
     usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
