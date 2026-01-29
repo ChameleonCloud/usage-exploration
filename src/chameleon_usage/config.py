@@ -32,7 +32,7 @@ class AdapterDef:
 
     adapter_class: Type
     required_inputs: List[Inputs]
-    config: Optional[SourceConfig] = None
+    config: SourceConfig
 
 
 @dataclass

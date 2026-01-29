@@ -95,27 +95,24 @@ class SegmentBuilder:
         """
         window end needed to terminate null spans
         """
+        # grouping columns excluding entity_id (we aggregate over entities)
+        extra_group_cols = [c for c in self.group_cols if c != C.ENTITY_ID]
+
         # 1. CREATE SPANS (Enrichment)
         #    "Host A" becomes "32 VCPUs"
-
-        # dummy: all resources have tyspe npdes
-        # resource_map = {"nodes"}
-        # spans = segments.join(resource_map, on="entity_id").select(
-        #     ["start", "end", "quantity_type", "value"]
-        # )
         spans = segments.select(
             [
                 pl.col("start"),
                 pl.col("end").fill_null(window_end),
                 pl.col("quantity_type"),
-                # pl.lit("nodes").alias("resource_type"),
                 pl.lit(1).alias("value"),
-            ],
+            ]
+            + [pl.col(c) for c in extra_group_cols if c != C.QUANTITY_TYPE]
         )
 
         # 2. CREATE DELTAS (Differentiation)
-        #    "1 nodess" becomes "+1 at Start" and "-1 at End"
-        #    "32 VCPUs" becomes "+32 at Start" and "-32 at End"
+        #    "1 nodes" becomes "+1 at Start" and "-1 at End"
+        extra_cols = [pl.col(c) for c in extra_group_cols if c != C.QUANTITY_TYPE]
         deltas = pl.concat(
             [
                 spans.select(
@@ -124,31 +121,33 @@ class SegmentBuilder:
                         pl.col("quantity_type"),
                         pl.col("value").alias("change"),
                     ]
+                    + extra_cols
                 ),
                 spans.select(
                     [
                         pl.col("end").alias("timestamp"),
                         pl.col("quantity_type"),
-                        # avoid reaching 0 at window end
                         pl.when(pl.col("end") >= window_end)
                         .then(0)
                         .otherwise(pl.col("value") * -1)
                         .alias("change"),
                     ]
+                    + extra_cols
                 ),
             ]
         )
 
         # 3. CREATE TOTALS (Integration)
-        #    Sum the changes
+        group_by_cols = ["timestamp"] + extra_group_cols
+        over_cols = extra_group_cols
         totals = (
-            deltas.group_by(["timestamp", "quantity_type"])
+            deltas.group_by(group_by_cols)
             .agg(pl.col("change").sum())
-            .sort(["quantity_type", "timestamp"])
+            .sort(over_cols + ["timestamp"])
             .with_columns(
                 pl.col("change")
                 .cum_sum()
-                .over("quantity_type")
+                .over(over_cols)
                 .cast(pl.Float64)
                 .alias("count")
             )

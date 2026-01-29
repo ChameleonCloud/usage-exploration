@@ -86,11 +86,13 @@ class BlazarAllocationAdapter(GenericFactAdapter):
         alloc: pl.LazyFrame,
         res: pl.LazyFrame,
         lease: pl.LazyFrame,
+        blazarhost: pl.LazyFrame,
         config: SourceConfig,
     ):
         self.alloc = alloc
         self.res = res
         self.lease = lease
+        self.blazarhost = blazarhost
         super().__init__(None, config)
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
@@ -100,38 +102,58 @@ class BlazarAllocationAdapter(GenericFactAdapter):
         2. Deleted At -> Value: "null" , timestamp
         """
 
-        base = (
-            self.alloc.join(
-                self.res,
-                left_on="reservation_id",
-                right_on="id",
-                how="left",
-                suffix="_res",
-            )
-            .join(
-                self.lease,
-                left_on="lease_id",
-                right_on="id",
-                how="left",
-                suffix="_lease",
-            )
-            .select(
-                [
-                    pl.col("compute_host_id").alias(C.ENTITY_ID),
-                    pl.min_horizontal(
-                        pl.max_horizontal(
-                            pl.col("start_date"),
-                            pl.col("created_at_lease"),
-                        ),
-                        pl.col("deleted_at_lease"),
-                    ).alias(C.CREATED_AT),
-                    pl.min_horizontal(
-                        pl.col("end_date"),
-                        pl.col("deleted_at_lease"),
-                    ).alias(C.DELETED_AT),
-                    pl.lit(Sources.BLAZAR).alias(C.SOURCE),
-                ]
-            )
+        # join 1: get hypervisor_hostname
+        alloc_hh = self.alloc.join(
+            other=self.blazarhost.select(["id", "hypervisor_hostname"]),
+            left_on="compute_host_id",
+            right_on="id",
+            how="left",
+            suffix="_host",
         )
 
+        # Join 2: get lease from reservation
+        alloc_res = alloc_hh.join(
+            self.res,
+            left_on="reservation_id",
+            right_on="id",
+            how="left",
+            suffix="_res",
+        )
+
+        # Join 3: Get timestamps from lease
+        alloc_lease = alloc_res.join(
+            self.lease,
+            left_on="lease_id",
+            right_on="id",
+            how="left",
+            suffix="_lease",
+        )
+
+        effective_start = pl.max_horizontal(
+            pl.col("start_date"),
+            pl.col("created_at_lease"),
+        )
+
+        effective_end = pl.min_horizontal(
+            pl.col("end_date"),
+            pl.col("deleted_at_lease"),
+        )
+
+        # rename outputs to known columns
+        base = alloc_lease.select(
+            [
+                pl.col("hypervisor_hostname").alias(C.ENTITY_ID),
+                pl.col("id").alias("allocation_id"),
+                pl.col("reservation_id"),
+                pl.col("lease_id"),
+                pl.col("compute_host_id").alias("blazar_host_id"),
+                effective_start.alias(C.CREATED_AT),
+                effective_end.alias(C.DELETED_AT),
+                pl.lit(Sources.BLAZAR).alias(C.SOURCE),
+            ]
+        ).filter(
+            # TODO: Exclude all leases deleted before starting
+            pl.col("created_at") < pl.col("deleted_at"),
+        )
+        print(base.collect())
         return self._expand_events(base)

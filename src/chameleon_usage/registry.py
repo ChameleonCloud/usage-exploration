@@ -19,15 +19,22 @@ SOURCE_CATALOG = {
 }
 
 
-def nova_host_source(input, entity_column):
+def generic_cfg(
+    source_name,
+    qty_type,
+    required_inputs,
+    id_col="hypervisor_hostname",
+    expr=None,
+    adapter_class=adapters.GenericFactAdapter,
+):
     return AdapterDef(
-        adapter_class=adapters.GenericFactAdapter,
-        required_inputs=[input],
+        adapter_class=adapter_class,
+        required_inputs=required_inputs,
         config=SourceConfig(
-            quantity_type=QT.TOTAL,
-            source=Sources.NOVA,
+            quantity_type=qty_type,
+            source=source_name,
             col_map={
-                Cols.ENTITY_ID: entity_column,
+                Cols.ENTITY_ID: id_col,
                 Cols.CREATED_AT: "created_at",
                 Cols.DELETED_AT: "deleted_at",
             },
@@ -35,100 +42,40 @@ def nova_host_source(input, entity_column):
     )
 
 
-nova_computenode = AdapterDef(
-    adapter_class=adapters.GenericFactAdapter,
-    required_inputs=[Inputs.NOVA_COMPUTE],
-    config=SourceConfig(
-        quantity_type=QT.TOTAL,
-        source=Sources.NOVA,
-        col_map={
-            Cols.ENTITY_ID: "hypervisor_hostname",
-            Cols.CREATED_AT: "created_at",
-            Cols.DELETED_AT: "deleted_at",
-        },
+#####
+# Priority flows Top down, first wins
+# Identity: group_by column order
+# Authority: Pivot column order
+# tuple of (Entity_id, QuantityType) -> independent timeline
+ADAPTER_PRIORITY = [
+    generic_cfg(
+        "nova_computenode", qty_type=QT.TOTAL, required_inputs=[Inputs.NOVA_COMPUTE]
     ),
-)
-nova_service = AdapterDef(
-    adapter_class=adapters.GenericFactAdapter,
-    required_inputs=[Inputs.NOVA_SERVICE],
-    config=SourceConfig(
-        quantity_type=QT.TOTAL,
-        source=Sources.NOVA,
-        col_map={
-            Cols.ENTITY_ID: "host",
-            Cols.CREATED_AT: "created_at",
-            Cols.DELETED_AT: "deleted_at",
-        },
-        filter_expr=pl.col("binary") == "nova-compute",
-    ),
-)
-
-nova_instance = AdapterDef(
-    adapter_class=adapters.GenericFactAdapter,
-    required_inputs=[Inputs.NOVA_INSTANCES],
-    config=SourceConfig(
-        quantity_type=QT.OCCUPIED,
-        source=Sources.NOVA,
-        col_map={
-            Cols.ENTITY_ID: "node",
-            Cols.CREATED_AT: "created_at",
-            Cols.DELETED_AT: "deleted_at",
-        },
-    ),
-)
-
-
-def blazar_host(quantity_type=QT.RESERVABLE):
-    return AdapterDef(
-        adapter_class=adapters.GenericFactAdapter,
+    generic_cfg(
+        "blazar_computehost",
+        qty_type=QT.RESERVABLE,
         required_inputs=[Inputs.BLAZAR_HOSTS],
-        config=SourceConfig(
-            quantity_type=quantity_type,
-            source=Sources.BLAZAR,
-            col_map={
-                Cols.ENTITY_ID: "hypervisor_hostname",
-                Cols.CREATED_AT: "created_at",
-                Cols.DELETED_AT: "deleted_at",
-            },
-        ),
-    )
-
-
-def blazar_allocation(quantity_type=QT.COMMITTED):
-    return AdapterDef(
-        adapter_class=adapters.BlazarAllocationAdapter,
+    ),
+    generic_cfg(
+        "blazar_allocation",
+        qty_type=QT.COMMITTED,
         required_inputs=[
             Inputs.BLAZAR_ALLOC,
             Inputs.BLAZAR_RES,
             Inputs.BLAZAR_LEASES,
+            Inputs.BLAZAR_HOSTS,
         ],
-        config=SourceConfig(
-            quantity_type=quantity_type,
-            source=Sources.BLAZAR,
-            col_map={
-                Cols.ENTITY_ID: "hypervisor_hostname",
-                # Cols.ENTITY_ID: "id",
-                Cols.CREATED_AT: "created_at",
-                Cols.DELETED_AT: "deleted_at",
-            },
-        ),
-    )
-
-
-# when two adapters contribute to same quantity type, higher in list has priorirt
-ADAPTER_REGISTRY = {
-    ## Primary 4 Sources
-    "nova_compute": nova_computenode,
-    "blazar_host": blazar_host(),
-    "blazar_allocation": blazar_allocation(),
-    "nova_instance": nova_instance,
-    ## Supplemental Rules
-    # "blazar_allocation_res_cap": blazar_allocation(quantity_type=QT.RESERVABLE),
-    # "blazar_host_total_cap": blazar_host(QT.TOTAL),
-    # "nova_service": nova_service,
-    # Allocation implies blazar host rule
-    # "blazar_allocation_total_cap": blazar_allocation(quantity_type=QT.TOTAL),
-}
+        adapter_class=adapters.BlazarAllocationAdapter,
+        id_col="compute_host_id",  # to hypervisor_hostname
+    ),
+    generic_cfg(
+        "nova_instance",
+        qty_type=QT.OCCUPIED,
+        required_inputs=[Inputs.NOVA_INSTANCES],
+        id_col="node",  # to hypervisor_hostname
+    ),
+]
+ADAPTER_REGISTRY = {d.config.source: d for d in ADAPTER_PRIORITY}
 
 
 def load_facts(base_path: str, site_name: str) -> pl.LazyFrame:
@@ -154,8 +101,7 @@ def load_facts(base_path: str, site_name: str) -> pl.LazyFrame:
             adapter = adapter_def.adapter_class(inputs[0], adapter_def.config)
         else:
             adapter = adapter_def.adapter_class(*inputs, adapter_def.config)
-        facts.append(
-            adapter.to_facts().with_columns(pl.lit(adapter_source).alias("source"))
-        )
+
+        facts.append(adapter.to_facts())
 
     return pl.concat(facts)
