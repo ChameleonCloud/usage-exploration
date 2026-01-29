@@ -104,6 +104,24 @@ def usage_line_plot(data: pl.DataFrame) -> alt.Chart:
     return fig
 
 
+def usage_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
+    """Faceted line plot comparing legacy vs current by quantity type."""
+    fig = (
+        alt.Chart(data)
+        .mark_line()
+        .encode(
+            x=alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
+            y=alt.Y(f"{C.COUNT}:Q"),
+            color=alt.Color("collector_type:N"),
+            strokeDash=alt.StrokeDash("collector_type:N"),
+        )
+        .properties(width=WIDTH, height=120)
+        .facet(row=alt.Row(f"{C.QUANTITY_TYPE}:N", header=alt.Header(labelFontSize=FONT_AXIS_LABEL)))
+    )
+
+    return fig
+
+
 def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str):
     data_to_plot = usage_timeseries.collect()
     usage_line_plot(data_to_plot).save(
@@ -111,4 +129,7 @@ def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str)
     )
     usage_stack_plot(data_to_plot).properties(width=WIDTH, height=WIDTH * 0.6).save(
         f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
+    )
+    usage_facet_plot(data_to_plot).save(
+        f"{output_path}/{site_name}_facet.png", scale_factor=SCALE_FACTOR
     )

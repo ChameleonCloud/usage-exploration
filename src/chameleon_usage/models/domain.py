@@ -24,6 +24,6 @@ class TimelineSchema(pa.DataFrameModel):
 class UsageSchema(pa.DataFrameModel):
     timestamp: pl.Datetime
     quantity_type: str
-    count: float
-    site: str = pa.Field(nullable=True)  # chi_uc, chi_tacc, kvm_tacc...
-    collector_type: str = pa.Field(nullable=True)  # legacy, current
+    count: float = pa.Field(coerce=True)
+    site: str  # chi_uc, chi_tacc, kvm_tacc...
+    collector_type: str  # legacy, current

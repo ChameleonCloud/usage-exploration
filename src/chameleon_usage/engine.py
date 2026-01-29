@@ -3,10 +3,13 @@ from pandera.typing.polars import LazyFrame as LazyGeneric
 
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import States
-from chameleon_usage.models.domain import FactSchema, TimelineSchema
+from chameleon_usage.models.domain import FactSchema, TimelineSchema, UsageSchema
 
 
 class TimelineBuilder:
+    def __init__(self, site_name: str) -> None:
+        self.site_name = site_name
+
     def build(self, raw_facts: LazyGeneric[FactSchema]) -> LazyGeneric[TimelineSchema]:
         """
         Takes list of facts:
@@ -47,8 +50,8 @@ class TimelineBuilder:
 
     def calculate_concurrency(
         self, timeline: LazyGeneric[TimelineSchema]
-    ) -> pl.LazyFrame:
-        return (
+    ) -> LazyGeneric[UsageSchema]:
+        output = (
             timeline
             # 1. MAP STATE TO NUMBER (The "Height" of the resource)
             #    Active = 1, Maintenance = 0 (or maybe 1 if you count it as 'occupied')
@@ -81,17 +84,22 @@ class TimelineBuilder:
                 pl.col(C.DELTA).cum_sum().over(C.QUANTITY_TYPE).alias(C.COUNT),
             )
             .select([C.TIMESTAMP, C.QUANTITY_TYPE, C.COUNT])
+        ).with_columns(
+            pl.lit(self.site_name).alias("site"),
+            pl.lit("current").alias("collector_type"),
         )
+
+        return UsageSchema.validate(output)
 
     def resample_time_weighted(
         self, usage: pl.LazyFrame, interval: str = "1d"
     ) -> pl.LazyFrame:
         return (
-            usage.sort([C.QUANTITY_TYPE, C.TIMESTAMP])
+            usage.sort(["collector_type", C.QUANTITY_TYPE, C.TIMESTAMP])
             .with_columns(
                 pl.col(C.TIMESTAMP)
                 .shift(-1)
-                .over(C.QUANTITY_TYPE)
+                .over(["collector_type", C.QUANTITY_TYPE])
                 .alias("next_timestamp")
             )
             .with_columns(
@@ -101,11 +109,11 @@ class TimelineBuilder:
             )
             .filter(pl.col("duration_seconds").is_not_null())
             .with_columns(pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket"))
-            .group_by(["bucket", C.QUANTITY_TYPE])
+            .group_by(["bucket", "collector_type", C.QUANTITY_TYPE])
             .agg(
                 (pl.col(C.COUNT) * pl.col("duration_seconds")).sum()
                 / pl.col("duration_seconds").sum()
             )
             .rename({"bucket": C.TIMESTAMP})
-            .sort([C.QUANTITY_TYPE, C.TIMESTAMP])
+            .sort(["collector_type", C.QUANTITY_TYPE, C.TIMESTAMP])
         )

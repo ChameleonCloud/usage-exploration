@@ -27,8 +27,10 @@ def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
     available = reservable - committed
     idle = committed - used (only if used exists)
     """
+    index_cols = [C.TIMESTAMP, "collector_type"]
+
     # long to wide
-    pivoted = df.collect().pivot(on=C.QUANTITY_TYPE, index=C.TIMESTAMP, values=C.COUNT)
+    pivoted = df.collect().pivot(on=C.QUANTITY_TYPE, index=index_cols, values=C.COUNT)
 
     # simple subtraction
     pivoted = pivoted.with_columns(
@@ -39,7 +41,7 @@ def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
     # wide to long
     unpivoted = (
         pivoted.unpivot(
-            index=C.TIMESTAMP, variable_name=C.QUANTITY_TYPE, value_name=C.COUNT
+            index=index_cols, variable_name=C.QUANTITY_TYPE, value_name=C.COUNT
         )
         .drop_nulls(C.COUNT)
         .lazy()
@@ -96,26 +98,43 @@ def main():
 
         usage_loader = LegacyUsageLoader("data/raw_spans", site_name)
 
+        legacy_usage_series = None
         try:
             usage_loader.load_facts()
-            # print(usage_loader.node_usage_report_cache.collect())
-            # print(usage_loader.node_usage.collect())
-            # print(usage_loader.node_count_cache.collect())
-            # print(usage_loader.node_event.collect())
-            # print(usage_loader.node_maintenance.collect())
-            print(usage_loader.get_usage().collect())
+            legacy_usage_series = usage_loader.get_usage()
         except FileNotFoundError:
             pass
 
         # process facts, convert to state timeline
-        engine = TimelineBuilder()
+        engine = TimelineBuilder(site_name=site_name)
         state_timeline = engine.build(facts_list)
 
         # process state timeline into usage timeserices
         usage_timeseries = engine.calculate_concurrency(state_timeline)
 
+        print(
+            usage_timeseries.collect().group_by("collector_type", "quantity_type").len()
+        )
+
+        reservable_ts = usage_timeseries.filter(
+            pl.col("quantity_type") == "reservable"
+        ).collect()
+        print(reservable_ts.select(C.TIMESTAMP).describe())
+        print(
+            reservable_ts.select(pl.col(C.TIMESTAMP).dt.truncate("7d")).unique().height
+        )
+
+        if legacy_usage_series is not None:
+            both_usage = pl.concat([usage_timeseries, legacy_usage_series])
+        else:
+            both_usage = usage_timeseries
+
         # resample timeseries for plotting
-        resampled_usage = engine.resample_time_weighted(usage_timeseries, interval="7d")
+        resampled_usage = engine.resample_time_weighted(both_usage, interval="1d")
+        # print(
+        #     resampled_usage.collect().group_by("collector_type", "quantity_type").len()
+        # )
+
         resampled_derived = compute_derived_metrics(resampled_usage)
         make_plots(resampled_derived, output_path="output/plots/", site_name=site_name)
 
