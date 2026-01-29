@@ -64,9 +64,9 @@ class SegmentBuilder:
                 pl.col("final_state").shift(1).over(self.group_cols).alias("prev_state")
             )
             .filter(
-                # Only output state changes, use prev_state to catch first entry
-                pl.col("final_state")
-                != pl.col("final_state").shift(1).over(self.group_cols)
+                # Select only changes from previous, or anything if no previous.
+                (pl.col("final_state") != pl.col("prev_state"))
+                | pl.col("prev_state").is_null()
             )
             .drop("prev_state")
         )
