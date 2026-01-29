@@ -5,7 +5,7 @@ import polars as pl
 from pandera.typing.polars import LazyFrame as LazyGeneric
 
 from chameleon_usage.constants import Cols as C
-from chameleon_usage.constants import Sources, States
+from chameleon_usage.constants import States
 from chameleon_usage.models.domain import FactSchema, SegmentSchema, UsageSchema
 
 
@@ -13,7 +13,7 @@ class SegmentBuilder:
     def __init__(
         self,
         site_name: str,
-        priority_order: List[str] | None = None,
+        priority_order: List[str],
         group_cols: List[str] | None = None,
     ):
         """
@@ -23,7 +23,7 @@ class SegmentBuilder:
         """
         self.site_name = site_name
         self.group_cols = group_cols if group_cols else [C.ENTITY_ID, C.QUANTITY_TYPE]
-        self.priority_order = priority_order or [Sources.NOVA, Sources.BLAZAR]
+        self.priority_order = priority_order
 
     def build(self, facts: pl.LazyFrame) -> LazyGeneric[SegmentSchema]:
         """

@@ -5,7 +5,7 @@ from pandera.typing.polars import LazyFrame as LazyGeneric
 
 from chameleon_usage.config import SourceConfig
 from chameleon_usage.constants import Cols as C
-from chameleon_usage.constants import Sources, States
+from chameleon_usage.constants import States
 from chameleon_usage.models.domain import FactSchema
 
 

@@ -2,7 +2,7 @@ import polars as pl
 
 from chameleon_usage import adapters
 from chameleon_usage.config import AdapterDef, FileResource, Inputs, SourceConfig
-from chameleon_usage.constants import Cols, Sources
+from chameleon_usage.constants import Cols
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.models import raw
 

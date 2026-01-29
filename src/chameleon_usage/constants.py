@@ -3,11 +3,6 @@ Constants defined in one place for reuse.
 """
 
 
-class Sources:
-    NOVA = "nova"
-    BLAZAR = "blazar"
-
-
 class QuantityTypes:
     TOTAL = "total"
     RESERVABLE = "reservable"
