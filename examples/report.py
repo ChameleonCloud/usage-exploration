@@ -36,7 +36,7 @@ def main():
         current_filtered = usage.filter(pl.col("timestamp") <= WINDOW_END)
 
         # resample to consistent time steps across all columns
-        current_resampled = resample_simple(current_filtered, interval="30d")
+        current_resampled = resample_simple(current_filtered, interval="90d")
         current = compute_derived_metrics(UsageSchema.validate(current_resampled))
 
         # legacy usage pipeline

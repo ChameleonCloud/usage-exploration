@@ -2,7 +2,8 @@ import polars as pl
 
 from chameleon_usage import adapters
 from chameleon_usage.config import AdapterDef, FileResource, Inputs, SourceConfig
-from chameleon_usage.constants import Cols, QuantityTypes, Sources
+from chameleon_usage.constants import Cols, Sources
+from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.models import raw
 
 SOURCE_CATALOG = {
@@ -18,53 +19,71 @@ SOURCE_CATALOG = {
 }
 
 
-# The "Recipe Book"
-ADAPTER_REGISTRY = {
-    "nova_compute": AdapterDef(
+def nova_host_source(input, entity_column):
+    return AdapterDef(
         adapter_class=adapters.GenericFactAdapter,
-        required_inputs=[Inputs.NOVA_COMPUTE],
+        required_inputs=[input],
         config=SourceConfig(
-            quantity_type=QuantityTypes.TOTAL,
+            quantity_type=QT.TOTAL,
             source=Sources.NOVA,
             col_map={
-                Cols.ENTITY_ID: "hypervisor_hostname",
+                Cols.ENTITY_ID: entity_column,
                 Cols.CREATED_AT: "created_at",
                 Cols.DELETED_AT: "deleted_at",
             },
         ),
+    )
+
+
+nova_computenode = AdapterDef(
+    adapter_class=adapters.GenericFactAdapter,
+    required_inputs=[Inputs.NOVA_COMPUTE],
+    config=SourceConfig(
+        quantity_type=QT.TOTAL,
+        source=Sources.NOVA,
+        col_map={
+            Cols.ENTITY_ID: "hypervisor_hostname",
+            Cols.CREATED_AT: "created_at",
+            Cols.DELETED_AT: "deleted_at",
+        },
     ),
-    "nova_service": AdapterDef(
-        adapter_class=adapters.GenericFactAdapter,
-        required_inputs=[Inputs.NOVA_SERVICE],
-        config=SourceConfig(
-            quantity_type=QuantityTypes.TOTAL,
-            source=Sources.NOVA,
-            col_map={
-                Cols.ENTITY_ID: "host",
-                Cols.CREATED_AT: "created_at",
-                Cols.DELETED_AT: "deleted_at",
-            },
-            filter_expr=pl.col("binary") == "nova-compute",
-        ),
+)
+nova_service = AdapterDef(
+    adapter_class=adapters.GenericFactAdapter,
+    required_inputs=[Inputs.NOVA_SERVICE],
+    config=SourceConfig(
+        quantity_type=QT.TOTAL,
+        source=Sources.NOVA,
+        col_map={
+            Cols.ENTITY_ID: "host",
+            Cols.CREATED_AT: "created_at",
+            Cols.DELETED_AT: "deleted_at",
+        },
+        filter_expr=pl.col("binary") == "nova-compute",
     ),
-    "nova_instance": AdapterDef(
-        adapter_class=adapters.GenericFactAdapter,
-        required_inputs=[Inputs.NOVA_INSTANCES],
-        config=SourceConfig(
-            quantity_type=QuantityTypes.OCCUPIED,
-            source=Sources.NOVA,
-            col_map={
-                Cols.ENTITY_ID: "node",
-                Cols.CREATED_AT: "created_at",
-                Cols.DELETED_AT: "deleted_at",
-            },
-        ),
+)
+
+nova_instance = AdapterDef(
+    adapter_class=adapters.GenericFactAdapter,
+    required_inputs=[Inputs.NOVA_INSTANCES],
+    config=SourceConfig(
+        quantity_type=QT.OCCUPIED,
+        source=Sources.NOVA,
+        col_map={
+            Cols.ENTITY_ID: "node",
+            Cols.CREATED_AT: "created_at",
+            Cols.DELETED_AT: "deleted_at",
+        },
     ),
-    "blazar_host": AdapterDef(
+)
+
+
+def blazar_host(quantity_type=QT.RESERVABLE):
+    return AdapterDef(
         adapter_class=adapters.GenericFactAdapter,
         required_inputs=[Inputs.BLAZAR_HOSTS],
         config=SourceConfig(
-            quantity_type=QuantityTypes.RESERVABLE,
+            quantity_type=quantity_type,
             source=Sources.BLAZAR,
             col_map={
                 Cols.ENTITY_ID: "hypervisor_hostname",
@@ -72,8 +91,11 @@ ADAPTER_REGISTRY = {
                 Cols.DELETED_AT: "deleted_at",
             },
         ),
-    ),
-    "blazar_allocation": AdapterDef(
+    )
+
+
+def blazar_allocation(quantity_type=QT.COMMITTED):
+    return AdapterDef(
         adapter_class=adapters.BlazarAllocationAdapter,
         required_inputs=[
             Inputs.BLAZAR_ALLOC,
@@ -81,15 +103,30 @@ ADAPTER_REGISTRY = {
             Inputs.BLAZAR_LEASES,
         ],
         config=SourceConfig(
-            quantity_type=QuantityTypes.COMMITTED,
+            quantity_type=quantity_type,
             source=Sources.BLAZAR,
             col_map={
                 Cols.ENTITY_ID: "hypervisor_hostname",
+                # Cols.ENTITY_ID: "id",
                 Cols.CREATED_AT: "created_at",
                 Cols.DELETED_AT: "deleted_at",
             },
         ),
-    ),
+    )
+
+
+ADAPTER_REGISTRY = {
+    ## Primary 4 Sources
+    "nova_compute": nova_computenode,
+    "blazar_host": blazar_host(),
+    "blazar_allocation": blazar_allocation(),
+    "nova_instance": nova_instance,
+    ## Supplemental Rules
+    "blazar_allocation_res_cap": blazar_allocation(quantity_type=QT.RESERVABLE),
+    "blazar_host_total_cap": blazar_host(QT.TOTAL),
+    # "nova_service": nova_service,
+    # Allocation implies blazar host rule
+    # "blazar_allocation_total_cap": blazar_allocation(quantity_type=QT.TOTAL),
 }
 
 
