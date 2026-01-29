@@ -74,11 +74,11 @@ def main():
         else:
             resampled = current
 
-        # print(
-        #     resampled.collect()
-        #     .group_by(["collector_type", "quantity_type"])
-        #     .agg(pl.col("count").count().alias("n_rows"))
-        # )
+        print(
+            resampled.collect()
+            .group_by(["collector_type", "quantity_type"])
+            .agg(pl.col("count").count().alias("n_rows"))
+        )
 
         make_plots(resampled, output_path="output/plots/", site_name=site_name)
 

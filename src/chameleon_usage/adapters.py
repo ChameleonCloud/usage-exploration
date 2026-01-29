@@ -149,11 +149,12 @@ class BlazarAllocationAdapter(GenericFactAdapter):
                 pl.col("compute_host_id").alias("blazar_host_id"),
                 effective_start.alias(C.CREATED_AT),
                 effective_end.alias(C.DELETED_AT),
-                pl.lit(Sources.BLAZAR).alias(C.SOURCE),
             ]
-        ).filter(
-            # TODO: Exclude all leases deleted before starting
-            pl.col("created_at") < pl.col("deleted_at"),
-        )
-        print(base.collect())
+        ).with_columns(pl.lit(self.cfg.source).alias(C.SOURCE))
+
+        # .filter(
+        #     # TODO: Exclude all leases deleted before starting
+        #     pl.col("created_at") < pl.col("deleted_at"),
+        # )
+        # print(base.collect())
         return self._expand_events(base)
