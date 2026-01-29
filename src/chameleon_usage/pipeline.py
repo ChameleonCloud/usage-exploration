@@ -1,26 +1,9 @@
 import polars as pl
 
-from chameleon_usage.adapters import (
-    BlazarAllocationAdapter,
-    BlazarComputehostAdapter,
-    NovaComputeAdapter,
-    NovaInstanceAdapter,
-)
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.models.domain import (
-    FactFrame,
-    SegmentFrame,
-    UsageFrame,
     UsageSchema,
-)
-from chameleon_usage.models.raw import (
-    BlazarAllocationRaw,
-    BlazarHostRaw,
-    BlazarLeaseRaw,
-    BlazarReservationRaw,
-    NovaHostRaw,
-    NovaInstanceRaw,
 )
 
 
@@ -41,7 +24,7 @@ def resample_simple(usage: pl.LazyFrame, interval: str = "1d") -> pl.LazyFrame:
     )
 
 
-def compute_derived_metrics(df: UsageFrame) -> UsageFrame:
+def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
     """Compute available and idle from base metrics.
 
     available = reservable - committed
@@ -80,42 +63,3 @@ def compute_derived_metrics(df: UsageFrame) -> UsageFrame:
     ).select(["timestamp", "quantity_type", "count", "site", "collector_type"])
 
     return UsageSchema.validate(unpivoted)
-
-
-def load_facts(input_data: str, site_name: str) -> FactFrame:
-    base_path = f"{input_data}/{site_name}"
-    all_facts = []
-    all_facts.append(
-        NovaComputeAdapter(
-            NovaHostRaw.validate(
-                pl.scan_parquet(f"{base_path}/nova.compute_nodes.parquet")
-            )
-        ).to_facts()
-    )
-    all_facts.append(
-        NovaInstanceAdapter(
-            NovaInstanceRaw.validate(
-                pl.scan_parquet(f"{base_path}/nova.instances.parquet")
-            )
-        ).to_facts()
-    )
-    all_facts.append(
-        BlazarComputehostAdapter(
-            BlazarHostRaw.validate(
-                pl.scan_parquet(f"{base_path}/blazar.computehosts.parquet")
-            )
-        ).to_facts()
-    )
-
-    blazardata = [
-        BlazarAllocationRaw.validate(
-            pl.scan_parquet(f"{base_path}/blazar.computehost_allocations.parquet")
-        ),
-        BlazarReservationRaw.validate(
-            pl.scan_parquet(f"{base_path}/blazar.reservations.parquet")
-        ),
-        BlazarLeaseRaw.validate(pl.scan_parquet(f"{base_path}/blazar.leases.parquet")),
-    ]
-    all_facts.append(BlazarAllocationAdapter(*blazardata).to_facts())
-    facts = pl.concat(all_facts)
-    return facts

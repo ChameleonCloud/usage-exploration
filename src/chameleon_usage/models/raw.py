@@ -6,8 +6,6 @@ Names necessary columns, minimal type coercion only.
 import pandera.polars as pa
 import polars as pl
 
-from chameleon_usage.constants import Cols as C
-
 
 class BlazarHostRaw(pa.DataFrameModel):
     id: str = pa.Field(unique=True)

@@ -25,7 +25,7 @@ class SegmentBuilder:
         self.group_cols = group_cols if group_cols else [C.ENTITY_ID, C.QUANTITY_TYPE]
         self.priority_order = priority_order or [Sources.NOVA, Sources.BLAZAR]
 
-    def build(self, facts: LazyGeneric[FactSchema]) -> LazyGeneric[SegmentSchema]:
+    def build(self, facts: pl.LazyFrame) -> LazyGeneric[SegmentSchema]:
         """
         Transformation:
             1. Facts (Raw Logs) -> Events (Resolved Change Log)

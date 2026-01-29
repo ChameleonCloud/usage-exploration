@@ -9,10 +9,10 @@ from chameleon_usage.legacyusage import LegacyUsageLoader
 from chameleon_usage.models.domain import UsageSchema
 from chameleon_usage.pipeline import (
     compute_derived_metrics,
-    load_facts,
     resample_simple,
 )
 from chameleon_usage.plots import make_plots
+from chameleon_usage.registry import load_facts
 
 # used as SENTINEL for null spans, clips
 # used as boundary for non-null events, filters
@@ -27,7 +27,7 @@ def main():
         engine = SegmentBuilder(site_name=site_name, priority_order=[])
 
         # input to facts list
-        facts = load_facts(input_data="data/raw_spans", site_name=site_name)
+        facts = load_facts(base_path="data/raw_spans", site_name=site_name)
         # facts (thing, ts) -> segments [t1,t2)
         segments = engine.build(facts)
         # cumulative sum on segments -> ts, resource, counts
