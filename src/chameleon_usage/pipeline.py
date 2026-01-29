@@ -56,11 +56,19 @@ def compute_derived_metrics(df: UsageFrame) -> UsageFrame:
     # long to wide
     pivoted = df.collect().pivot(on=C.QUANTITY_TYPE, index=index_cols, values=C.COUNT)
 
+    # only know these after pivot
+    cols = pivoted.columns
+
     # simple subtraction
-    pivoted = pivoted.with_columns(
-        (pl.col(QT.RESERVABLE) - pl.col(QT.COMMITTED)).alias(QT.AVAILABLE),
-        (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
-    )
+    if QT.RESERVABLE in cols and QT.COMMITTED in cols:
+        pivoted = pivoted.with_columns(
+            (pl.col(QT.RESERVABLE) - pl.col(QT.COMMITTED)).alias(QT.AVAILABLE),
+        )
+
+    if QT.COMMITTED in cols and QT.OCCUPIED in cols:
+        pivoted = pivoted.with_columns(
+            (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
+        )
 
     # wide to long
     unpivoted = (
