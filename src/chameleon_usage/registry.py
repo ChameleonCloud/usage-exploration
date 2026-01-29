@@ -115,6 +115,7 @@ def blazar_allocation(quantity_type=QT.COMMITTED):
     )
 
 
+# when two adapters contribute to same quantity type, higher in list has priorirt
 ADAPTER_REGISTRY = {
     ## Primary 4 Sources
     "nova_compute": nova_computenode,
@@ -122,8 +123,8 @@ ADAPTER_REGISTRY = {
     "blazar_allocation": blazar_allocation(),
     "nova_instance": nova_instance,
     ## Supplemental Rules
-    "blazar_allocation_res_cap": blazar_allocation(quantity_type=QT.RESERVABLE),
-    "blazar_host_total_cap": blazar_host(QT.TOTAL),
+    # "blazar_allocation_res_cap": blazar_allocation(quantity_type=QT.RESERVABLE),
+    # "blazar_host_total_cap": blazar_host(QT.TOTAL),
     # "nova_service": nova_service,
     # Allocation implies blazar host rule
     # "blazar_allocation_total_cap": blazar_allocation(quantity_type=QT.TOTAL),
@@ -147,12 +148,14 @@ def load_facts(base_path: str, site_name: str) -> pl.LazyFrame:
         )
     # Run each adapter
     facts = []
-    for adapter_def in ADAPTER_REGISTRY.values():
+    for adapter_source, adapter_def in ADAPTER_REGISTRY.items():
         inputs = [loaded[i] for i in adapter_def.required_inputs]
         if len(inputs) == 1:
             adapter = adapter_def.adapter_class(inputs[0], adapter_def.config)
         else:
             adapter = adapter_def.adapter_class(*inputs, adapter_def.config)
-        facts.append(adapter.to_facts())
+        facts.append(
+            adapter.to_facts().with_columns(pl.lit(adapter_source).alias("source"))
+        )
 
     return pl.concat(facts)

@@ -12,7 +12,7 @@ from chameleon_usage.pipeline import (
     resample_simple,
 )
 from chameleon_usage.plots import make_plots
-from chameleon_usage.registry import load_facts
+from chameleon_usage.registry import ADAPTER_REGISTRY, load_facts
 
 # used as SENTINEL for null spans, clips
 # used as boundary for non-null events, filters
@@ -24,7 +24,10 @@ def main():
         ########################
         # current usage pipeline
         ########################
-        engine = SegmentBuilder(site_name=site_name, priority_order=[])
+
+        source_order = list(ADAPTER_REGISTRY.keys())
+        print(f"Source Order!: {source_order}")
+        engine = SegmentBuilder(site_name=site_name, priority_order=source_order)
 
         # input to facts list
         facts = load_facts(base_path="data/raw_spans", site_name=site_name)
