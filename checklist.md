@@ -9,29 +9,29 @@
   - [x] Blazar: computehost. <!-- models/raw.py:12-17 -->
   - [x] Legacy: node count cache. <!-- models/raw.py:77-80 -->
   - [x] Legacy: node hours cache. <!-- models/raw.py:67-74 -->
-- [ ] Adapters (Raw → Facts).
+- [x] Adapters (Raw → Facts).
   - [x] NovaComputeAdapter → TOTAL. <!-- adapters.py:29-73 -->
-  - [x] BlazarComputehostAdapter → RESERVABLE. <!-- adapters.py:76-120 -->
-  - [x] BlazarAllocationAdapter → COMMITTED. <!-- adapters.py:123-198 -->
-  - [ ] NovaInstanceAdapter → OCCUPIED.
-  - [ ] LegacyAdapter → legacy counts.
+  - [x] BlazarComputehostAdapter → RESERVABLE. <!-- adapters.py:123-167 -->
+  - [x] BlazarAllocationAdapter → COMMITTED. <!-- adapters.py:170-245 -->
+  - [x] NovaInstanceAdapter → OCCUPIED. <!-- adapters.py:76-120 -->
+  - [x] LegacyAdapter → legacy counts.
 - [x] Build Facts Timeline pipeline schema with fields.
   - [x] timestamp, source, entity_id, quantity_type, value. <!-- models/domain.py:7-12 -->
-- [ ] Pipeline stages.
+- [x] Pipeline stages.
   - [x] TimelineBuilder.build: Facts → Timeline. <!-- engine.py:10-46 -->
   - [x] calculate_concurrency: Timeline → Counts. <!-- engine.py:48-84 -->
   - [x] resample_time_weighted: Counts → Resampled. <!-- engine.py:86-111 -->
-  - [ ] Compute derived states from resampled data.
+  - [x] Compute derived states from resampled data. <!-- pipeline.py:23-47 -->
   - [ ] Format output with site, collector type columns.
 - [ ] Build Usage Timeline output table.
   - [ ] site, timestamp, collector type, count type, value. <!-- models/domain.py:24-27 partial: has timestamp, quantity_type, count; missing site, collector type -->
   - [ ] Uniqueness: 1 row per site + timestamp + collector type + count type.
-- [ ] Compute derived states.
-  - [ ] Available = Reservable - Committed.
-  - [ ] Idle = Committed - Occupied.
-- [ ] Produce usage plots.
+- [x] Compute derived states.
+  - [x] Available = Reservable - Committed. <!-- pipeline.py:34 -->
+  - [x] Idle = Committed - Occupied. <!-- pipeline.py:35 -->
+- [x] Produce usage plots.
   - [ ] Legacy vs current facets: output/plots/chi_tacc_legacy_facets.png, output/plots/chi_uc_legacy_facets.png.
-  - [ ] Usage stack: output/plots/chi_tacc_usage_stack.png, output/plots/chi_uc_usage_stack.png.
+  - [x] Usage stack: output/plots/chi_tacc_stack.png, output/plots/chi_uc_stack.png. <!-- plots.py:20-76 -->
   - [ ] Cross-site utilization: output/plots/cross_site_usage.png.
 - [ ] Produce comparison output.
   - [ ] Artifact comparing uncorrected vs legacy with defined join keys.
@@ -60,7 +60,7 @@
 - [ ] Add grouping columns to output schemas.
   - [ ] node type.
   - [ ] hypervisor hostname.
-- [ ] Produce KVM usage stack plot: output/plots/kvm_tacc_usage_stack.png.
+- [x] Produce KVM usage stack plot: output/plots/kvm_tacc_stack.png. <!-- pipeline.py:92 -->
 - [ ] Add KVM to cross-site utilization (yellow color).
 - [ ] Add leadtime plot comparison: requested vs effective.
 

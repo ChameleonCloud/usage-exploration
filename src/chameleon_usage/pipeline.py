@@ -9,6 +9,7 @@ from chameleon_usage.adapters import (
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.engine import TimelineBuilder
+from chameleon_usage.legacyusage import LegacyUsageLoader
 from chameleon_usage.models.raw import (
     BlazarAllocationRaw,
     BlazarHostRaw,
@@ -92,6 +93,19 @@ def main():
     for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
         # load data, convert to facts timeline
         facts_list = load_facts(input_data="data/raw_spans", site_name=site_name)
+
+        usage_loader = LegacyUsageLoader("data/raw_spans", site_name)
+
+        try:
+            usage_loader.load_facts()
+            # print(usage_loader.node_usage_report_cache.collect())
+            # print(usage_loader.node_usage.collect())
+            # print(usage_loader.node_count_cache.collect())
+            # print(usage_loader.node_event.collect())
+            # print(usage_loader.node_maintenance.collect())
+            print(usage_loader.get_usage().collect())
+        except FileNotFoundError:
+            pass
 
         # process facts, convert to state timeline
         engine = TimelineBuilder()
