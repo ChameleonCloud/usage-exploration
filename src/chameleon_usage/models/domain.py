@@ -6,9 +6,9 @@ import polars as pl
 # Input to segment builder
 class FactSchema(pa.DataFrameModel):
     timestamp: pl.Datetime
-    entity_id: str
-    value: str = pa.Field(nullable=True)  # Null = Reset/Delete
     source: str
+    entity_id: str
+    value: str
     quantity_type: str
 
 

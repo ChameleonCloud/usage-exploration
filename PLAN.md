@@ -1,65 +1,156 @@
-# urgent, ordered, implementation plan
+# Usage reporting implementation plan
+
+## Phase 1 Deliverables
+
+### Usage
+Collector type:
+* Legacy # values from chameleon_usage table
+* New    # this tool
+
+"""
+Output categories
+General: Total usage pool, reservable+ondemand+unknown
+reservable: reservable usage pool
+committed: pool of active allocations, usable for reservable instances
+occupied: pool of capacity occupied by nova instances
+"""
+Usage type:
+* General
+* Reservable
+* Committed
+* Occupied
+<!-- * Active # Optional -->
+
+Value type:
+* nodes
+<!-- * vcpus -->
+<!-- * memory_mb -->
+<!-- * disk_gb -->
+<!-- * gpus -->
+
+Grouping Colums(optional):
+* Node Type
+* Hypervisor Hostname
+
+Usage Timeline:
+* timestamp
+  * collector type
+  * usage type
+  * value type
+  * value quantity
+  * node type           # group by column
+  * hypervisor hostname # group by column
+
+-------------------------------------------------------------------
+| timestamp | Collector Type | Count Type | Value | (Group_cols,) |
+-------------------------------------------------------------------
+
+Derived States:
+* Available = Reservable - Comitted
+* Idle = Comitted - Occupied
+<!-- * Stopped = Occupied - Active -->
+
+Plots:
+1. Plot legacy vs current for each count_type
+   a. output/plots/chi_tacc_legacy_facets.png
+   b. output/plots/chi_uc_legacy_facets.png
+2. Plot stacked usage:
+   * black line total cap
+   * dashed line reservable cap
+   * ? line legacy reservable cap
+   * area: maintenance cap
+   * area: available cap
+   * area: Idle cap
+   * area: used cap
+   a. output/plots/chi_tacc_usage_stack.png
+   b. output/plots/chi_uc_usage_stack.png
+   <!-- a. output/plots/kvm_tacc_usage_stack.png -->
+3. Cross-site utilization
+   * black line total cap
+   * colors per site: 
+     * green->UC
+     * orange->tacc
+     <!-- * yellow-kvm -->
+   * light -> "available capacity"
+   * dark -> "used capacity: reservable UNION used"
+   a. output/plots/cross_site_usage.png
+
+### Lead Time
+
+Leadtime Type:
+* requested (scheduled start - created)
+* effective (actual_start - created) # need to handle case where lease was deleted prior to start, failed to start, ...
+<!-- * projected (reconstruct past timeline) -->
+
+Lead Time Timeline:
+----------------------------------------------------------------
+| timestamp | Leadtime Type | Value (duration) | (Group_cols,) |
+----------------------------------------------------------------
+
+Leadtime Plot
+* point plot: x=timestamp, y=value, hue=node_type.
+   * compare requested vs effective # Optional, Sanity check
+
+## Phase 1 implementation
 
 
+### Input Schemas
 
-## Invariants that are always true.
+* Nova
+  * computenode
+  * instance
+* blazar
+  * lease
+  * reservation
+  * computehost_allocation
+  * computehost
+  * computehost_extra_capability
+* legacy
+  * node count cache
+  * node hours cache
 
-1. never lose rows. input rows = output rows + rejected_with_reason rows
-2. never lose hours. hours = end-start per row. Per row: input hours = output hours + rejected_with_reason hours
+### Pipeline Schemas
 
-## Day 1
-- [x]: define DB tables to fetch
-- [x]: fetch tables, per site, from local dbs to parquet files.
-   stored in input/{site_name}/{schemaname}.{tablename}.{date}.parquet
-- [x]: fetch legacy `chameleon_usage` tables
-- [x]: import data from parquet
-- [x]: plot "legacy" chameleon usage
-- [x]: do initial joins?
-
-## Day 2 base
-- [x] Fix `etc/sites.yaml:5` to use `output/raw_spans/chi_tacc`
-- [x] Add `NovaHostSource` from `nova.services` (compute services only)
-- [x] Add `BlazarHostSource` from `blazar.computehosts`
-- [x] Tag both valid and audit rows with `source`
-- [x] Implement minimal ledger → cumsum aggregation and plot the 4 series
-   - [x] split spans to events
-   - [x] sweepling alg on events
-   - [x] add pure math method to resample for outputs
-   - [x] plot results
-
-## Day 2 iteration
-
-### Goals (augmentation & derived metrics)
-
-- [x] fix grouping of audit data: group by source, data status, year(start date)
-- [x] emit audit data with results
-- [x] better output format
-- [x] check invariant: no lost rows
-- [ ] check invariant: no lost hours
-- [ ] legacy comparison plot
+* Facts Timeline
+  * timestamp
+  * source  # table+sufficient_id
+  * entity_id  # primary key from table
+  * quantity_type
+  * value
+  * node type           # group by column
+  * hypervisor hostname # group by column
 
 
+### Output Schemas
 
 
-- [ ] investigate available nova services data: does it give better timestamps and history for nova compute nodes?
-- [ ] decide how to combine nova services and compute hosts. is it a join? host spine?
+* uniqueness:
+   * grouping produces exactly 1 row per group:
+      * site, timestamp, collector type, count type
+* Usage Timeline:
+  * site
+  * timestamp
+  * collector type
+  * count type
+  * value
+  <!-- * node type           # group by column -->
+  <!-- * hypervisor hostname # group by column -->
 
-- [ ] **Host Spine**: Use `nova.services` as canonical host existence (has disabled_reason, heartbeat history). Currently using `nova.compute_nodes` which lacks this.
-
-- [ ] **Active vs Occupied**: Replay `instance_actions` to distinguish running vs stopped instances. Adds `nova_instance_active` series.
-
-- [ ] **Derived Metrics**: Pure algebra after sweepline:
-  - `available = admittable - committed`
-  - `idle = committed - occupied`
-  - `stopped = occupied - active`
-
-- [ ] **Maintenance Mask**: Load `chameleon_usage.node_maintenance`, emit negative overlay spans that subtract from admittable.
-
-- [ ] **Conflict Exclusion**: Detect duplicate Blazar hosts, emit exclusion spans. Nothing silently deduplicated.
-
-- [ ] **Three-State Pool Membership**: Blazar gaps ≠ ondemand. Represent as `reservable | not_reservable | unknown`. Uncertainty is explicit.
+* uniqueness:
+   * grouping produces exactly 1 row per group:
+      * site, timestamp, leadtime type
+* leadtime timeline:
+  * site
+  * timestamp
+  * leadtime type
+  * value
+  <!-- * node type           # group by column -->
+  <!-- * hypervisor hostname # group by column -->
 
 
-### Smaller next steps
-
-- [ ] (minor): resampling math uses "last", should use time-weighted average
+## Acceptance Criteria
+* Date coverage: data includes 2016-01-01 through 2025-12-31. UTC
+* known gaps
+   * nova hosts prior to 2018
+   * blazar hosts prior to 2020
+* all schemas have columns, no extra columns
