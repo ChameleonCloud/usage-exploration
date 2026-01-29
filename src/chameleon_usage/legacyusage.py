@@ -57,16 +57,17 @@ class LegacyUsageLoader:
         )
 
     def _to_current_hours(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
+        reservable = pl.col("total_hours") - pl.col("maint_hours")
+        committed = pl.col("reserved_hours") + pl.col("used_hours")
+
         return aggregated.select(
             pl.col("date"),
             pl.col("total_hours"),
-            (pl.col("total_hours") - pl.col("maint_hours")).alias("reservable_hours"),
-            (pl.col("reservable_hours") - pl.col("committed_hours")).alias(
-                "available_hours"
-            ),
+            reservable.alias("reservable_hours"),
+            committed.alias("committed_hours"),
+            (reservable - committed).alias("available_hours"),
             pl.col("reserved_hours").alias("idle_hours"),
             # pl.col("idle_hours").alias("idle_hours_orig"),
-            (pl.col("reserved_hours") + pl.col("used_hours")).alias("committed_hours"),
             pl.col("used_hours").alias("occupied_hours"),
         )
 
