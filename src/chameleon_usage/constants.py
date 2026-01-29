@@ -15,6 +15,10 @@ class QuantityTypes:
     OCCUPIED = "occupied"
     ACTIVE = "active"
 
+    # Derived
+    AVAILABLE = "available"
+    IDLE = "idle"
+
 
 class States:
     ACTIVE = "active"
