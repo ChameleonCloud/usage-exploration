@@ -1,4 +1,5 @@
 from abc import ABC
+from typing import Protocol, runtime_checkable
 
 import polars as pl
 from pandera.typing.polars import LazyFrame as LazyGeneric
@@ -16,25 +17,52 @@ from chameleon_usage.models.raw import (
 )
 
 
-class BaseAdapter(ABC):
-    quantity_type: str
-
-    def __init__(self, raw_df: pl.LazyFrame):
-        self.raw_df = raw_df
-
+@runtime_checkable  # Optional: allows isinstance(obj, FactAdapter) at runtime
+class FactAdapter(Protocol):
     def to_facts(self) -> LazyGeneric[FactSchema]:
+        """
+        Must return a LazyFrame adhering to FactSchema.
+        """
         raise NotImplementedError
 
 
-class NovaComputeAdapter(BaseAdapter):
+def _expand_events(
+    base_df: pl.LazyFrame, quantity_type: str
+) -> LazyGeneric[FactSchema]:
     """
-    Takes input values from nova computenode table and generates facts.
+    Consumes a standardized LazyFrame [entity_id, source, created_at, deleted_at]
+    and explodes it into the Start/End FactSchema.
     """
+    starts = base_df.select(
+        pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
+        pl.col(C.ENTITY_ID),
+        pl.lit(quantity_type).alias(C.QUANTITY_TYPE),
+        pl.lit(States.ACTIVE).alias(C.VALUE),
+        pl.col(C.SOURCE),
+    )
 
-    quantity_type = QuantityTypes.TOTAL
+    # Important! Filters out events with null deleted_at
+    # they are not an "observation" point
+    ends = base_df.filter(pl.col(C.DELETED_AT).is_not_null()).select(
+        pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
+        pl.col(C.ENTITY_ID),
+        pl.lit(quantity_type).alias(C.QUANTITY_TYPE),
+        pl.lit(States.DELETED).alias(C.VALUE),
+        pl.col(C.SOURCE),
+    )
+
+    events = pl.concat([starts, ends])
+    return FactSchema.validate(events)
+
+
+class NovaComputeAdapter:
+    """
+    Generates Facts for "nova hosts"
+    """
 
     def __init__(self, raw_df: LazyGeneric[NovaHostRaw]):
         self.raw_df = raw_df
+        self.quantity_type = QuantityTypes.TOTAL
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
         """
@@ -52,36 +80,18 @@ class NovaComputeAdapter(BaseAdapter):
                 pl.lit(Sources.NOVA).alias(C.SOURCE),
             ]
         )
-
-        starts = base.select(
-            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.ACTIVE).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-        ends = base.select(
-            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.DELETED).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-
-        combined = pl.concat([starts, ends])
-
-        return FactSchema.validate(combined)
+        events = _expand_events(base, self.quantity_type)
+        return FactSchema.validate(events)
 
 
-class NovaInstanceAdapter(BaseAdapter):
+class NovaInstanceAdapter:
     """
     Takes input values from nova computenode table and generates facts.
     """
 
-    quantity_type = QuantityTypes.OCCUPIED
-
     def __init__(self, raw_df: LazyGeneric[NovaInstanceRaw]):
         self.raw_df = raw_df
+        self.quantity_type = QuantityTypes.OCCUPIED
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
         """
@@ -100,35 +110,18 @@ class NovaInstanceAdapter(BaseAdapter):
             ]
         )
 
-        starts = base.select(
-            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.ACTIVE).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-        ends = base.select(
-            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.DELETED).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-
-        combined = pl.concat([starts, ends])
-
-        return FactSchema.validate(combined)
+        events = _expand_events(base, self.quantity_type)
+        return FactSchema.validate(events)
 
 
-class BlazarComputehostAdapter(BaseAdapter):
+class BlazarComputehostAdapter:
     """
     Takes input values from nova computenode table and generates facts.
     """
 
-    quantity_type = QuantityTypes.RESERVABLE
-
     def __init__(self, raw_df: LazyGeneric[BlazarHostRaw]):
         self.raw_df = raw_df
+        self.quantity_type = QuantityTypes.RESERVABLE
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
         """
@@ -147,32 +140,14 @@ class BlazarComputehostAdapter(BaseAdapter):
             ]
         )
 
-        starts = base.select(
-            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.ACTIVE).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-        ends = base.select(
-            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.DELETED).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-
-        combined = pl.concat([starts, ends])
-
-        return FactSchema.validate(combined)
+        events = _expand_events(base, self.quantity_type)
+        return FactSchema.validate(events)
 
 
-class BlazarAllocationAdapter(BaseAdapter):
+class BlazarAllocationAdapter:
     """
     Takes input values from nova computenode table and generates facts.
     """
-
-    quantity_type = QuantityTypes.COMMITTED
 
     def __init__(
         self,
@@ -183,6 +158,7 @@ class BlazarAllocationAdapter(BaseAdapter):
         self.alloc = alloc
         self.res = res
         self.lease = lease
+        self.quantity_type = QuantityTypes.COMMITTED
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
         """
@@ -225,21 +201,5 @@ class BlazarAllocationAdapter(BaseAdapter):
             )
         )
 
-        starts = base.select(
-            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.ACTIVE).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-        ends = base.select(
-            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
-            pl.col(C.ENTITY_ID),
-            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
-            pl.lit(States.DELETED).alias(C.VALUE),
-            pl.col(C.SOURCE),
-        )
-
-        combined = pl.concat([starts, ends])
-
-        return FactSchema.validate(combined)
+        events = _expand_events(base, self.quantity_type)
+        return FactSchema.validate(events)
