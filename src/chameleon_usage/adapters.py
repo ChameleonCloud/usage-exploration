@@ -76,7 +76,6 @@ class BlazarAllocationAdapter(GenericFactAdapter):
 
     def __init__(
         self,
-        raw_df: pl.LazyFrame,
         alloc: pl.LazyFrame,
         res: pl.LazyFrame,
         lease: pl.LazyFrame,
@@ -85,7 +84,7 @@ class BlazarAllocationAdapter(GenericFactAdapter):
         self.alloc = alloc
         self.res = res
         self.lease = lease
-        super().__init__(raw_df, config)
+        super().__init__(None, config)
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
         """

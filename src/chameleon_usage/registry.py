@@ -59,6 +59,23 @@ ADAPTER_REGISTRY = {
             },
         ),
     ),
+    "blazar_allocation": AdapterDef(
+        adapter_class=adapters.BlazarAllocationAdapter,
+        required_inputs=[
+            Inputs.BLAZAR_ALLOC,
+            Inputs.BLAZAR_RES,
+            Inputs.BLAZAR_LEASES,
+        ],
+        config=SourceConfig(
+            quantity_type=QuantityTypes.COMMITTED,
+            source=Sources.BLAZAR,
+            col_map={
+                Cols.ENTITY_ID: "hypervisor_hostname",
+                Cols.CREATED_AT: "created_at",
+                Cols.DELETED_AT: "deleted_at",
+            },
+        ),
+    ),
 }
 
 
