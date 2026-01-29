@@ -44,7 +44,7 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
             alt.FieldOneOfPredicate(field="quantity_type", oneOf=area_types)
         )
         .transform_calculate(stack_order=f"indexof({area_types}, datum.quantity_type)")
-        .mark_area()
+        .mark_area(interpolate="step-after")
         .encode(
             x=x_time,
             y=alt.Y(f"{C.COUNT}:Q", stack=True),
@@ -55,7 +55,7 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
 
     line_total = (
         base.transform_filter(alt.datum.quantity_type == "total")
-        .mark_line(strokeWidth=2)
+        .mark_line(strokeWidth=2, interpolate="step-after")
         .encode(
             x=x_time,
             y=alt.Y(f"{C.COUNT}:Q"),
@@ -65,7 +65,7 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
 
     line_reservable = (
         base.transform_filter(alt.datum.quantity_type == "reservable")
-        .mark_line(strokeWidth=2, strokeDash=[4, 4])
+        .mark_line(strokeWidth=2, strokeDash=[4, 4], interpolate="step-after")
         .encode(
             x=x_time,
             y=alt.Y(f"{C.COUNT}:Q"),
@@ -93,7 +93,7 @@ def usage_line_plot(data: pl.DataFrame) -> alt.Chart:
 
     fig = (
         alt.Chart(data)
-        .mark_line()
+        .mark_line(interpolate="step-after")
         .encode(x=X_TIME, y=Y_COUNT, color=COLOR_QTY)
         .properties(width=WIDTH, height=WIDTH * 0.6)
         .configure_axis(labelFontSize=FONT_TICK, titleFontSize=FONT_AXIS_LABEL)
@@ -108,7 +108,7 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
     """Faceted line plot comparing legacy vs current by quantity type."""
     fig = (
         alt.Chart(data)
-        .mark_line()
+        .mark_line(interpolate="step-after")
         .encode(
             x=alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
             y=alt.Y(f"{C.COUNT}:Q"),
@@ -137,7 +137,7 @@ def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str)
     usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
         f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
     )
-    usage_line_plot(data_to_plot).save(
+    usage_line_plot(stack_subset).save(
         f"{output_path}/{site_name}.png", scale_factor=SCALE_FACTOR
     )
     usage_facet_plot(data_to_plot).save(

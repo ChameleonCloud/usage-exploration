@@ -13,6 +13,10 @@ from chameleon_usage.pipeline import (
 )
 from chameleon_usage.plots import make_plots
 
+# used as SENTINEL for null spans, clips
+# used as boundary for non-null events, filters
+WINDOW_END = datetime(2025, 11, 1)
+
 
 def main():
     for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
@@ -34,7 +38,7 @@ def main():
         segments = engine.build(facts)
         segments.collect_schema()
 
-        usage = engine.calculate_concurrency(segments)
+        usage = engine.calculate_concurrency(segments, window_end=WINDOW_END)
         usage.collect_schema()
 
         usage_derived = compute_derived_metrics(usage)
@@ -47,11 +51,10 @@ def main():
         else:
             usage_merged = usage_derived
 
-        WINDOW_END = datetime(2025, 11, 1)
-        filtered = usage_merged.filter(pl.col("timestamp") < WINDOW_END)
+        filtered = usage_merged.filter(pl.col("timestamp") <= WINDOW_END)
 
         # resample and compute derived metrics
-        resampled = resample_simple(filtered, interval="30d")
+        resampled = resample_simple(filtered, interval="60d")
         resampled.collect_schema()
         print(resampled.collect())
 

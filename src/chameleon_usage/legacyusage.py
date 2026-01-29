@@ -44,29 +44,42 @@ class LegacyUsageLoader:
                 pl.scan_parquet(f"{self.parquet_path}/chameleon_usage.{key}.parquet"),
             )
 
-    def get_usage(self) -> LazyGeneric[UsageSchema]:
-        #  date       ┆ node_type         ┆ cnt
-        # node_counts = NodeCountCache.validate(self.node_count_cache)
-        # TODO: check how this is computed...
+    HOURS_PER_DAY = 24
 
-        # date       ┆ node_type         ┆ maint_hours ┆ reserved_hours ┆ used_hours ┆ idle_hours ┆ total_hours
+    def _aggregate_hours_by_date(self) -> pl.LazyFrame:
         node_hours = NodeUsageReportCache.validate(self.node_usage_report_cache)
-        hours_per_period = 24  # it is bucketed daily
+        return node_hours.group_by("date").agg(
+            pl.col("maint_hours").sum(),
+            pl.col("reserved_hours").sum(),
+            pl.col("used_hours").sum(),
+            pl.col("idle_hours").sum(),
+            pl.col("total_hours").sum(),
+        )
 
-        # need long with quantity_type
+    def _hours_to_counts(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
+        return aggregated.select(
+            pl.col("date").alias(C.TIMESTAMP),
+            (pl.col("total_hours") / self.HOURS_PER_DAY).alias(QT.RESERVABLE),
+            (pl.col("reserved_hours") / self.HOURS_PER_DAY).alias(QT.COMMITTED),
+            (pl.col("used_hours") / self.HOURS_PER_DAY).alias(QT.OCCUPIED),
+            (pl.col("used_hours") / self.HOURS_PER_DAY).alias(QT.ACTIVE),
+            (pl.col("idle_hours") / self.HOURS_PER_DAY).alias(QT.IDLE),
+        )
 
-        output_format = (
-            node_hours.select(
-                (pl.col("date")).alias(C.TIMESTAMP),
-                (pl.col("total_hours") / hours_per_period).alias(QT.RESERVABLE),
-                (pl.col("reserved_hours") / hours_per_period).alias(QT.COMMITTED),
-                # treat all used as active
-                (pl.col("used_hours") / hours_per_period).alias(QT.OCCUPIED),
-                (pl.col("used_hours") / hours_per_period).alias(QT.ACTIVE),
-                # trust source calc for "idle"
-                (pl.col("idle_hours") / hours_per_period).alias(QT.IDLE),
-            )
-            .unpivot(
+    def _hours_to_percent(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
+        return aggregated.select(
+            pl.col("date").alias(C.TIMESTAMP),
+            (pl.col("reserved_hours") / pl.col("total_hours") * 100).alias(
+                QT.COMMITTED
+            ),
+            (pl.col("used_hours") / pl.col("total_hours") * 100).alias(QT.OCCUPIED),
+            (pl.col("used_hours") / pl.col("total_hours") * 100).alias(QT.ACTIVE),
+            (pl.col("idle_hours") / pl.col("total_hours") * 100).alias(QT.IDLE),
+        )
+
+    def _to_long_format(self, wide: pl.LazyFrame) -> pl.LazyFrame:
+        return (
+            wide.unpivot(
                 index=C.TIMESTAMP,
                 variable_name=C.QUANTITY_TYPE,
                 value_name=C.COUNT,
@@ -79,4 +92,11 @@ class LegacyUsageLoader:
                 pl.lit("legacy").alias("collector_type"),
             )
         )
-        return UsageSchema.validate(output_format)
+
+    def get_usage(self, as_percent: bool = False) -> LazyGeneric[UsageSchema]:
+        aggregated = self._aggregate_hours_by_date()
+        if as_percent:
+            wide = self._hours_to_percent(aggregated)
+        else:
+            wide = self._hours_to_counts(aggregated)
+        return UsageSchema.validate(self._to_long_format(wide))

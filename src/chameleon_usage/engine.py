@@ -90,9 +90,11 @@ class SegmentBuilder:
         )
 
     def calculate_concurrency(
-        self,
-        segments: LazyGeneric[SegmentSchema],
+        self, segments: LazyGeneric[SegmentSchema], window_end: datetime
     ) -> LazyGeneric[UsageSchema]:
+        """
+        window end needed to terminate null spans
+        """
         # 1. CREATE SPANS (Enrichment)
         #    "Host A" becomes "32 VCPUs"
 
@@ -101,11 +103,10 @@ class SegmentBuilder:
         # spans = segments.join(resource_map, on="entity_id").select(
         #     ["start", "end", "quantity_type", "value"]
         # )
-        SENTINEL = datetime(9999, 12, 31)
         spans = segments.select(
             [
                 pl.col("start"),
-                pl.col("end").fill_null(SENTINEL),
+                pl.col("end").fill_null(window_end),
                 pl.col("quantity_type"),
                 # pl.lit("nodes").alias("resource_type"),
                 pl.lit(1).alias("value"),
@@ -128,7 +129,11 @@ class SegmentBuilder:
                     [
                         pl.col("end").alias("timestamp"),
                         pl.col("quantity_type"),
-                        (pl.col("value") * -1).alias("change"),
+                        # avoid reaching 0 at window end
+                        pl.when(pl.col("end") >= window_end)
+                        .then(0)
+                        .otherwise(pl.col("value") * -1)
+                        .alias("change"),
                     ]
                 ),
             ]
