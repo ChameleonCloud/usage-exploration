@@ -54,7 +54,7 @@ def main():
         filtered = usage_merged.filter(pl.col("timestamp") <= WINDOW_END)
 
         # resample and compute derived metrics
-        resampled = resample_simple(filtered, interval="60d")
+        resampled = resample_simple(filtered, interval="30d")
         resampled.collect_schema()
         print(resampled.collect())
 

@@ -56,25 +56,41 @@ class LegacyUsageLoader:
             pl.col("total_hours").sum(),
         )
 
-    def _hours_to_counts(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
+    def _to_current_hours(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
         return aggregated.select(
+            pl.col("date"),
+            pl.col("total_hours"),
+            (pl.col("total_hours") - pl.col("maint_hours")).alias("reservable_hours"),
+            pl.col("reserved_hours").alias("idle_hours"),
+            # pl.col("idle_hours").alias("idle_hours_orig"),
+            (pl.col("reserved_hours") + pl.col("used_hours")).alias("committed_hours"),
+            pl.col("used_hours").alias("occupied_hours"),
+        )
+
+    def _hours_to_counts(self, hours: pl.LazyFrame) -> pl.LazyFrame:
+        return hours.select(
             pl.col("date").alias(C.TIMESTAMP),
-            (pl.col("total_hours") / self.HOURS_PER_DAY).alias(QT.RESERVABLE),
-            (pl.col("reserved_hours") / self.HOURS_PER_DAY).alias(QT.COMMITTED),
-            (pl.col("used_hours") / self.HOURS_PER_DAY).alias(QT.OCCUPIED),
-            (pl.col("used_hours") / self.HOURS_PER_DAY).alias(QT.ACTIVE),
+            (pl.col("total_hours") / self.HOURS_PER_DAY).alias(QT.TOTAL),
+            (pl.col("reservable_hours") / self.HOURS_PER_DAY).alias(QT.RESERVABLE),
+            (pl.col("committed_hours") / self.HOURS_PER_DAY).alias(QT.COMMITTED),
+            (pl.col("occupied_hours") / self.HOURS_PER_DAY).alias(QT.OCCUPIED),
+            # (pl.col("occupied_hours") / self.HOURS_PER_DAY).alias(QT.ACTIVE),
             (pl.col("idle_hours") / self.HOURS_PER_DAY).alias(QT.IDLE),
         )
 
-    def _hours_to_percent(self, aggregated: pl.LazyFrame) -> pl.LazyFrame:
-        return aggregated.select(
+    def _hours_to_percent(self, hours: pl.LazyFrame) -> pl.LazyFrame:
+        return hours.select(
             pl.col("date").alias(C.TIMESTAMP),
-            (pl.col("reserved_hours") / pl.col("total_hours") * 100).alias(
+            (pl.col("committed_hours") / pl.col("reservable_hours") * 100).alias(
                 QT.COMMITTED
             ),
-            (pl.col("used_hours") / pl.col("total_hours") * 100).alias(QT.OCCUPIED),
-            (pl.col("used_hours") / pl.col("total_hours") * 100).alias(QT.ACTIVE),
-            (pl.col("idle_hours") / pl.col("total_hours") * 100).alias(QT.IDLE),
+            (pl.col("occupied_hours") / pl.col("reservable_hours") * 100).alias(
+                QT.OCCUPIED
+            ),
+            (pl.col("occupied_hours") / pl.col("reservable_hours") * 100).alias(
+                QT.ACTIVE
+            ),
+            (pl.col("idle_hours") / pl.col("reservable_hours") * 100).alias(QT.IDLE),
         )
 
     def _to_long_format(self, wide: pl.LazyFrame) -> pl.LazyFrame:
@@ -95,8 +111,9 @@ class LegacyUsageLoader:
 
     def get_usage(self, as_percent: bool = False) -> LazyGeneric[UsageSchema]:
         aggregated = self._aggregate_hours_by_date()
+        hours = self._to_current_hours(aggregated)
         if as_percent:
-            wide = self._hours_to_percent(aggregated)
+            wide = self._hours_to_percent(hours)
         else:
-            wide = self._hours_to_counts(aggregated)
+            wide = self._hours_to_counts(hours)
         return UsageSchema.validate(self._to_long_format(wide))

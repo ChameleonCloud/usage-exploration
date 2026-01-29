@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import altair as alt
 import polars as pl
 
@@ -88,42 +90,60 @@ def usage_line_plot(data: pl.DataFrame) -> alt.FacetChart:
     return fig
 
 
-def usage_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
+def usage_facet_plot(data: pl.DataFrame) -> alt.VConcatChart:
     """Faceted line plot comparing legacy vs current by quantity type."""
-    fig = (
-        alt.Chart(data)
-        .mark_line(interpolate="step-after")
-        .encode(
-            x=alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
-            y=alt.Y(f"{C.COUNT}:Q"),
-            color=alt.Color("collector_type:N"),
-            strokeDash=alt.StrokeDash("collector_type:N"),
-        )
-        .properties(width=WIDTH, height=120)
-        .facet(
-            row=alt.Row(
-                f"{C.QUANTITY_TYPE}:N", header=alt.Header(labelFontSize=FONT_AXIS_LABEL)
+    charts = []
+    for qty_type in QTY_ORDER:
+        subset = data.filter(pl.col(C.QUANTITY_TYPE) == qty_type)
+        if subset.is_empty():
+            continue
+        qty_color = QTY_COLORS[qty_type]
+        chart = (
+            alt.Chart(subset)
+            .mark_line(interpolate="step-after")
+            .encode(
+                x=alt.X(
+                    f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")
+                ),
+                y=alt.Y(f"{C.COUNT}:Q", title=f"# {qty_type}"),
+                color=alt.Color(
+                    "collector_type:N",
+                    scale=alt.Scale(
+                        domain=["current", "legacy"], range=[qty_color, qty_color]
+                    ),
+                    legend=alt.Legend(title=qty_type),
+                ),
+                strokeDash=alt.StrokeDash(
+                    "collector_type:N",
+                    scale=alt.Scale(
+                        domain=["current", "legacy"], range=[[1, 0], [4, 4]]
+                    ),
+                    legend=None,
+                ),
+                opacity=alt.Opacity(
+                    "collector_type:N",
+                    scale=alt.Scale(domain=["current", "legacy"], range=[1, 0.5]),
+                    legend=None,
+                ),
             )
+            .properties(width=WIDTH, height=120)
         )
-    )
+        charts.append(chart)
 
-    return fig
+    return alt.vconcat(*charts).resolve_scale(color="independent")
 
 
 def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str):
     data_to_plot = usage_timeseries.collect()
 
-    stack_subset = data_to_plot.filter(
-        pl.col("collector_type") == "current",
-        # pl.col("quantity_type") != "occupied",
-        # pl.col("quantity_type") != "committed",
-    )
-    usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
-        f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
-    )
+    # recent = data_to_plot.filter(pl.col("timestamp") >= datetime(2022, 1, 1))
     usage_line_plot(data_to_plot).save(
         f"{output_path}/{site_name}.png", scale_factor=SCALE_FACTOR
     )
     usage_facet_plot(data_to_plot).save(
         f"{output_path}/{site_name}_facet.png", scale_factor=SCALE_FACTOR
+    )
+    stack_subset = data_to_plot.filter(pl.col("collector_type") == "current")
+    usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
+        f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
     )

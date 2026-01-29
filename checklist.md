@@ -30,8 +30,8 @@
   - [x] Available = Reservable - Committed. <!-- pipeline.py:34 -->
   - [x] Idle = Committed - Occupied. <!-- pipeline.py:35 -->
 - [x] Produce usage plots.
-  - [ ] Legacy vs current facets: output/plots/chi_tacc_legacy_facets.png, output/plots/chi_uc_legacy_facets.png.
-  - [x] Usage stack: output/plots/chi_tacc_stack.png, output/plots/chi_uc_stack.png. <!-- plots.py:20-76 -->
+  - [x] Legacy vs current facets: output/plots/chi_tacc_facet.png, output/plots/chi_uc_facet.png. <!-- plots.py:93-145 -->
+  - [x] Usage stack: output/plots/chi_tacc_stack.png, output/plots/chi_uc_stack.png. <!-- plots.py:34-74 -->
   - [ ] Cross-site utilization: output/plots/cross_site_usage.png.
 - [ ] Produce comparison output.
   - [ ] Artifact comparing uncorrected vs legacy with defined join keys.
