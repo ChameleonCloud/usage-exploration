@@ -2,6 +2,7 @@ import altair as alt
 import polars as pl
 
 from chameleon_usage.constants import Cols as C
+from chameleon_usage.constants import QuantityTypes as QT
 
 # Chart dimensions
 WIDTH = 516
@@ -22,18 +23,18 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
 
     # Stack order: used (bottom), idle, committed, available (top)
     # Legend order: top-to-bottom matching visual stack, then lines
-    area_types = ["used", "idle", "committed", "available"]
-    line_types = ["total", "reservable"]
+    area_types = [QT.OCCUPIED, QT.IDLE, QT.COMMITTED, QT.AVAILABLE]
+    line_types = [QT.TOTAL, QT.RESERVABLE]
     all_types = (
         line_types + area_types[::-1]
     )  # legend order: lines first, then stack top-to-bottom
     all_colors = {
-        "used": "green",
-        "idle": "orange",
-        "committed": "#1f77b4",
-        "available": "#aec7e8",
-        "total": "black",
-        "reservable": "grey",
+        QT.OCCUPIED: "green",
+        QT.IDLE: "orange",
+        QT.COMMITTED: "#1f77b4",
+        QT.AVAILABLE: "#aec7e8",
+        QT.TOTAL: "black",
+        QT.RESERVABLE: "grey",
     }
 
     color_scale = alt.Scale(domain=all_types, range=[all_colors[t] for t in all_types])

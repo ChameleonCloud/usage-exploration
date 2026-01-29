@@ -4,6 +4,7 @@ from chameleon_usage.adapters import (
     BlazarAllocationAdapter,
     BlazarComputehostAdapter,
     NovaComputeAdapter,
+    NovaInstanceAdapter,
 )
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
@@ -31,7 +32,7 @@ def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
     # simple subtraction
     pivoted = pivoted.with_columns(
         (pl.col(QT.RESERVABLE) - pl.col(QT.COMMITTED)).alias(QT.AVAILABLE),
-        # (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
+        (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
     )
 
     # wide to long
@@ -56,13 +57,13 @@ def load_facts(input_data: str, site_name: str):
             )
         ).to_facts()
     )
-    # all_facts.append(
-    #     NovaComputeAdapter(
-    #         NovaHostRaw.validate(
-    #             pl.scan_parquet(f"{base_path}/nova.compute_nodes.parquet")
-    #         )
-    #     ).to_facts()
-    # )
+    all_facts.append(
+        NovaInstanceAdapter(
+            NovaInstanceRaw.validate(
+                pl.scan_parquet(f"{base_path}/nova.instances.parquet")
+            )
+        ).to_facts()
+    )
     all_facts.append(
         BlazarComputehostAdapter(
             BlazarHostRaw.validate(

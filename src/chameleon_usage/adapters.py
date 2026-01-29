@@ -73,6 +73,53 @@ class NovaComputeAdapter(BaseAdapter):
         return FactSchema.validate(combined)
 
 
+class NovaInstanceAdapter(BaseAdapter):
+    """
+    Takes input values from nova computenode table and generates facts.
+    """
+
+    quantity_type = QuantityTypes.OCCUPIED
+
+    def __init__(self, raw_df: LazyGeneric[NovaInstanceRaw]):
+        self.raw_df = raw_df
+
+    def to_facts(self) -> LazyGeneric[FactSchema]:
+        """
+        Generates 2 Facts from each NovaHostRaw row:
+        1. Created At -> Value: "active" , timestamp
+        2. Deleted At -> Value: "null" , timestamp
+        """
+
+        # map raw columns to standard column names
+        base = self.raw_df.select(
+            [
+                pl.col(NovaInstanceRaw.node).alias(C.ENTITY_ID),
+                pl.col(NovaInstanceRaw.created_at).alias(C.CREATED_AT),
+                pl.col(NovaInstanceRaw.deleted_at).alias(C.DELETED_AT),
+                pl.lit(Sources.NOVA).alias(C.SOURCE),
+            ]
+        )
+
+        starts = base.select(
+            pl.col(C.CREATED_AT).alias(C.TIMESTAMP),
+            pl.col(C.ENTITY_ID),
+            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
+            pl.lit(States.ACTIVE).alias(C.VALUE),
+            pl.col(C.SOURCE),
+        )
+        ends = base.select(
+            pl.col(C.DELETED_AT).alias(C.TIMESTAMP),
+            pl.col(C.ENTITY_ID),
+            pl.lit(self.quantity_type).alias(C.QUANTITY_TYPE),
+            pl.lit(States.DELETED).alias(C.VALUE),
+            pl.col(C.SOURCE),
+        )
+
+        combined = pl.concat([starts, ends])
+
+        return FactSchema.validate(combined)
+
+
 class BlazarComputehostAdapter(BaseAdapter):
     """
     Takes input values from nova computenode table and generates facts.
