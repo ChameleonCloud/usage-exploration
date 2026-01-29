@@ -1,13 +1,30 @@
 # Phase 1 Implementation Checklist
 
-- [ ] Ingest input schemas.
-  - [ ] Nova: computenode, instance.
-  - [ ] Blazar: lease, reservation, computehost_allocation, computehost, computehost_extra_capability.
-  - [ ] Legacy: node count cache, node hours cache.
-- [ ] Build Facts Timeline pipeline schema with fields.
-  - [ ] timestamp, source, entity_id, quantity_type, value, node type, hypervisor hostname.
+- [x] Ingest input schemas.
+  - [x] Nova: computenode. <!-- models/raw.py:43-48 -->
+  - [x] Nova: instance. <!-- models/raw.py:59-64 -->
+  - [x] Blazar: lease. <!-- models/raw.py:20-25 -->
+  - [x] Blazar: reservation. <!-- models/raw.py:28-32 -->
+  - [x] Blazar: computehost_allocation. <!-- models/raw.py:35-40 -->
+  - [x] Blazar: computehost. <!-- models/raw.py:12-17 -->
+  - [x] Legacy: node count cache. <!-- models/raw.py:77-80 -->
+  - [x] Legacy: node hours cache. <!-- models/raw.py:67-74 -->
+- [ ] Adapters (Raw → Facts).
+  - [x] NovaComputeAdapter → TOTAL. <!-- adapters.py:29-73 -->
+  - [x] BlazarComputehostAdapter → RESERVABLE. <!-- adapters.py:76-120 -->
+  - [x] BlazarAllocationAdapter → COMMITTED. <!-- adapters.py:123-198 -->
+  - [ ] NovaInstanceAdapter → OCCUPIED.
+  - [ ] LegacyAdapter → legacy counts.
+- [x] Build Facts Timeline pipeline schema with fields.
+  - [x] timestamp, source, entity_id, quantity_type, value. <!-- models/domain.py:7-12 -->
+- [ ] Pipeline stages.
+  - [x] TimelineBuilder.build: Facts → Timeline. <!-- engine.py:10-46 -->
+  - [x] calculate_concurrency: Timeline → Counts. <!-- engine.py:48-84 -->
+  - [x] resample_time_weighted: Counts → Resampled. <!-- engine.py:86-111 -->
+  - [ ] Compute derived states from resampled data.
+  - [ ] Format output with site, collector type columns.
 - [ ] Build Usage Timeline output table.
-  - [ ] site, timestamp, collector type, count type, value.
+  - [ ] site, timestamp, collector type, count type, value. <!-- models/domain.py:24-27 partial: has timestamp, quantity_type, count; missing site, collector type -->
   - [ ] Uniqueness: 1 row per site + timestamp + collector type + count type.
 - [ ] Compute derived states.
   - [ ] Available = Reservable - Committed.
@@ -32,6 +49,7 @@
 
 # Phase 1.5 (scope creep)
 
+- [ ] Blazar: computehost_extra_capability schema.
 - [ ] Add value types.
   - [ ] vcpus.
   - [ ] memory_mb.

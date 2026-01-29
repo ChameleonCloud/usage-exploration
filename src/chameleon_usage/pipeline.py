@@ -96,7 +96,7 @@ def run_demo():
         )
         .properties(width=900, height=600)
     )
-    fig.save("temp.png")
+    fig.save("output/plots/temp.png")
 
 
 if __name__ == "__main__":
