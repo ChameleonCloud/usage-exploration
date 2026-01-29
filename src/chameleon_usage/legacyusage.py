@@ -61,6 +61,9 @@ class LegacyUsageLoader:
             pl.col("date"),
             pl.col("total_hours"),
             (pl.col("total_hours") - pl.col("maint_hours")).alias("reservable_hours"),
+            (pl.col("reservable_hours") - pl.col("committed_hours")).alias(
+                "available_hours"
+            ),
             pl.col("reserved_hours").alias("idle_hours"),
             # pl.col("idle_hours").alias("idle_hours_orig"),
             (pl.col("reserved_hours") + pl.col("used_hours")).alias("committed_hours"),
@@ -74,7 +77,7 @@ class LegacyUsageLoader:
             (pl.col("reservable_hours") / self.HOURS_PER_DAY).alias(QT.RESERVABLE),
             (pl.col("committed_hours") / self.HOURS_PER_DAY).alias(QT.COMMITTED),
             (pl.col("occupied_hours") / self.HOURS_PER_DAY).alias(QT.OCCUPIED),
-            ((pl.col("reservable_hours") - pl.col("committed_hours")) / self.HOURS_PER_DAY).alias(QT.AVAILABLE),
+            (pl.col("available_hours") / self.HOURS_PER_DAY).alias(QT.AVAILABLE),
             (pl.col("idle_hours") / self.HOURS_PER_DAY).alias(QT.IDLE),
         )
 
