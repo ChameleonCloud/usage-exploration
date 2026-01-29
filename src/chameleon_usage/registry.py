@@ -89,6 +89,18 @@ ADAPTER_PRIORITY = [
         qty_type=QT.TOTAL,
         required_inputs=[Inputs.BLAZAR_HOSTS],
     ),
+    # blazar allocation imples blazar host
+    generic_cfg(
+        "blazar_allocation_implies_host",
+        qty_type=QT.RESERVABLE,
+        required_inputs=[
+            Inputs.BLAZAR_ALLOC,
+            Inputs.BLAZAR_RES,
+            Inputs.BLAZAR_LEASES,
+            Inputs.BLAZAR_HOSTS,
+        ],
+        adapter_class=adapters.BlazarAllocationAdapter,
+    ),
 ]
 ADAPTER_REGISTRY = {d.config.source: d for d in ADAPTER_PRIORITY}
 

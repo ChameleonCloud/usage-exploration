@@ -152,9 +152,9 @@ class BlazarAllocationAdapter(GenericFactAdapter):
             ]
         ).with_columns(pl.lit(self.cfg.source).alias(C.SOURCE))
 
-        # .filter(
-        #     # TODO: Exclude all leases deleted before starting
-        #     pl.col("created_at") < pl.col("deleted_at"),
-        # )
-        # print(base.collect())
+        # TODO: LOG PROPERLY
+        base = base.filter(
+            pl.col("entity_id").is_not_null()
+            & (pl.col("created_at") <= pl.col("deleted_at"))
+        )
         return self._expand_events(base)

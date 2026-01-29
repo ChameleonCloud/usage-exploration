@@ -50,9 +50,9 @@ def main():
         # input to facts list
         facts = load_facts(base_path="data/raw_spans", site_name=site_name)
 
-        counts = (
-            counts_by_source(facts).collect().filter(pl.col("timestamp") <= WINDOW_END)
-        )
+        ### Debug: Contribution by source
+        counts = counts_by_source(facts).collect()
+        counts = counts.filter((pl.col("timestamp") <= WINDOW_END))
         source_facet_plot(counts).save(
             f"output/{site_name}_source_facet.png", scale_factor=3
         )
