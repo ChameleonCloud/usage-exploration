@@ -8,7 +8,7 @@ from chameleon_usage.adapters import (
 )
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
-from chameleon_usage.engine import TimelineBuilder
+from chameleon_usage.engine import SegmentBuilder
 from chameleon_usage.legacyusage import LegacyUsageLoader
 from chameleon_usage.models.raw import (
     BlazarAllocationRaw,
@@ -106,37 +106,37 @@ def main():
             pass
 
         # process facts, convert to state timeline
-        engine = TimelineBuilder(site_name=site_name)
-        state_timeline = engine.build(facts_list)
+        engine = SegmentBuilder(site_name=site_name, priority_order=[])
+        segments = engine.build(facts_list)
 
         # process state timeline into usage timeserices
-        usage_timeseries = engine.calculate_concurrency(state_timeline)
+        usage_timeseries = engine.calculate_concurrency(segments)
 
         print(
             usage_timeseries.collect().group_by("collector_type", "quantity_type").len()
         )
 
-        reservable_ts = usage_timeseries.filter(
-            pl.col("quantity_type") == "reservable"
-        ).collect()
-        print(reservable_ts.select(C.TIMESTAMP).describe())
-        print(
-            reservable_ts.select(pl.col(C.TIMESTAMP).dt.truncate("7d")).unique().height
-        )
+        # reservable_ts = usage_timeseries.filter(
+        #     pl.col("quantity_type") == "reservable"
+        # ).collect()
+        # print(reservable_ts.select(C.TIMESTAMP).describe())
+        # print(
+        #     reservable_ts.select(pl.col(C.TIMESTAMP).dt.truncate("7d")).unique().height
+        # )
 
         if legacy_usage_series is not None:
             both_usage = pl.concat([usage_timeseries, legacy_usage_series])
         else:
             both_usage = usage_timeseries
 
-        # resample timeseries for plotting
-        resampled_usage = engine.resample_time_weighted(both_usage, interval="1d")
+        # # resample timeseries for plotting
+        # resampled_usage = engine.resample_time_weighted(both_usage, interval="1d")
         # print(
         #     resampled_usage.collect().group_by("collector_type", "quantity_type").len()
         # )
 
-        resampled_derived = compute_derived_metrics(resampled_usage)
-        make_plots(resampled_derived, output_path="output/plots/", site_name=site_name)
+        # resampled_derived = compute_derived_metrics(resampled_usage)
+        # make_plots(resampled_derived, output_path="output/plots/", site_name=site_name)
 
 
 if __name__ == "__main__":

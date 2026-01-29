@@ -22,9 +22,9 @@
   - [x] calculate_concurrency: Timeline → Counts. <!-- engine.py:48-84 -->
   - [x] resample_time_weighted: Counts → Resampled. <!-- engine.py:86-111 -->
   - [x] Compute derived states from resampled data. <!-- pipeline.py:23-47 -->
-  - [ ] Format output with site, collector type columns.
+  - [x] Format output with site, collector type columns.
 - [ ] Build Usage Timeline output table.
-  - [ ] site, timestamp, collector type, count type, value. <!-- models/domain.py:24-27 partial: has timestamp, quantity_type, count; missing site, collector type -->
+  - [x] site, timestamp, collector type, count type, value. <!-- models/domain.py:24-27 partial: has timestamp, quantity_type, count; missing site, collector type -->
   - [ ] Uniqueness: 1 row per site + timestamp + collector type + count type.
 - [x] Compute derived states.
   - [x] Available = Reservable - Committed. <!-- pipeline.py:34 -->

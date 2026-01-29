@@ -12,10 +12,11 @@ class FactSchema(pa.DataFrameModel):
     quantity_type: str
 
 
-# Ourput of timeline builder:
-# Sequence of state events
-class TimelineSchema(pa.DataFrameModel):
-    timestamp: pl.Datetime
+# Output of segment builder:
+# Entity segments with explicit [start, end)
+class SegmentSchema(pa.DataFrameModel):
+    start: pl.Datetime
+    end: pl.Datetime = pa.Field(nullable=True)
     entity_id: str
     quantity_type: str
     final_state: str
