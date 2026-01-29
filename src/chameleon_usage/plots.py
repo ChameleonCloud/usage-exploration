@@ -147,3 +147,17 @@ def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str)
     usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
         f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
     )
+
+
+def source_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
+    return (
+        alt.Chart(data)
+        .mark_line(interpolate="step-after")
+        .encode(
+            x=alt.X("timestamp:T", axis=alt.Axis(format="%Y", tickCount="year")),
+            y=alt.Y("count:Q"),
+            color="source:N",
+        )
+        .properties(width=500, height=120)
+        .facet(row="quantity_type:N")
+    )

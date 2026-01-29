@@ -66,13 +66,28 @@ ADAPTER_PRIORITY = [
             Inputs.BLAZAR_HOSTS,
         ],
         adapter_class=adapters.BlazarAllocationAdapter,
-        id_col="compute_host_id",  # to hypervisor_hostname
     ),
     generic_cfg(
         "nova_instance",
         qty_type=QT.OCCUPIED,
         required_inputs=[Inputs.NOVA_INSTANCES],
         id_col="node",  # to hypervisor_hostname
+    ),
+    ####################
+    # Supplemental rules
+    ####################
+    generic_cfg(
+        "nova_compute_service",
+        qty_type=QT.TOTAL,
+        required_inputs=[Inputs.NOVA_SERVICE],
+        expr=(pl.col("binary") == "nova-compute"),
+        id_col="host",  # to hypervisor_hostname
+    ),
+    # blazar host implies nova host rule
+    generic_cfg(
+        "blazar_computehost_implies_nova",
+        qty_type=QT.TOTAL,
+        required_inputs=[Inputs.BLAZAR_HOSTS],
     ),
 ]
 ADAPTER_REGISTRY = {d.config.source: d for d in ADAPTER_PRIORITY}

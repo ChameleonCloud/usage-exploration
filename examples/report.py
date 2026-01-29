@@ -11,12 +11,30 @@ from chameleon_usage.pipeline import (
     compute_derived_metrics,
     resample_simple,
 )
-from chameleon_usage.plots import make_plots
+from chameleon_usage.plots import make_plots, source_facet_plot
 from chameleon_usage.registry import ADAPTER_PRIORITY, load_facts
 
 # used as SENTINEL for null spans, clips
 # used as boundary for non-null events, filters
 WINDOW_END = datetime(2025, 11, 1)
+
+
+def counts_by_source(facts: pl.LazyFrame) -> pl.LazyFrame:
+    starts = facts.filter(pl.col("value") == "active").select(
+        "timestamp", "quantity_type", "source", pl.lit(1).alias("change")
+    )
+    ends = facts.filter(pl.col("value") == "deleted").select(
+        "timestamp", "quantity_type", "source", pl.lit(-1).alias("change")
+    )
+    return (
+        pl.concat([starts, ends])
+        .group_by(["timestamp", "quantity_type", "source"])
+        .agg(pl.col("change").sum())
+        .sort(["source", "quantity_type", "timestamp"])
+        .with_columns(
+            pl.col("change").cum_sum().over(["quantity_type", "source"]).alias("count")
+        )
+    )
 
 
 def main():
@@ -26,23 +44,20 @@ def main():
         ########################
 
         source_order = [s.config.source for s in ADAPTER_PRIORITY]
-        print(f"Source Order!: {source_order}")
+
         engine = SegmentBuilder(site_name=site_name, priority_order=source_order)
 
         # input to facts list
         facts = load_facts(base_path="data/raw_spans", site_name=site_name)
-        print(
-            facts.collect()
-            .group_by(
-                [
-                    "entity_id",
-                    "quantity_type",
-                    "source",
-                ]
-            )
-            .agg(pl.len().alias("count"))
-            .sort("count", descending=True)
+
+        counts = (
+            counts_by_source(facts).collect().filter(pl.col("timestamp") <= WINDOW_END)
         )
+        source_facet_plot(counts).save(
+            f"output/{site_name}_source_facet.png", scale_factor=3
+        )
+
+        # Usage:
 
         # facts (thing, ts) -> segments [t1,t2)
         segments = engine.build(facts)
@@ -63,7 +78,7 @@ def main():
             legacy = (
                 loader.get_usage()
                 .filter(pl.col("timestamp") <= WINDOW_END)
-                .pipe(resample_simple, interval="30d")
+                .pipe(resample_simple, interval="7d")
             )
         except FileNotFoundError:
             pass
@@ -73,12 +88,6 @@ def main():
             resampled = pl.concat([current, legacy], how="diagonal")
         else:
             resampled = current
-
-        print(
-            resampled.collect()
-            .group_by(["collector_type", "quantity_type"])
-            .agg(pl.col("count").count().alias("n_rows"))
-        )
 
         make_plots(resampled, output_path="output/plots/", site_name=site_name)
 
