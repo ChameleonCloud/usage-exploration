@@ -8,8 +8,12 @@ from chameleon_usage.adapters import (
 )
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
-from chameleon_usage.engine import SegmentBuilder
-from chameleon_usage.legacyusage import LegacyUsageLoader
+from chameleon_usage.models.domain import (
+    FactFrame,
+    SegmentFrame,
+    UsageFrame,
+    UsageSchema,
+)
 from chameleon_usage.models.raw import (
     BlazarAllocationRaw,
     BlazarHostRaw,
@@ -18,16 +22,36 @@ from chameleon_usage.models.raw import (
     NovaHostRaw,
     NovaInstanceRaw,
 )
-from chameleon_usage.plots import make_plots
 
 
-def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
+def resample_simple(usage: pl.LazyFrame, interval: str = "1d") -> pl.LazyFrame:
+    """Simple resampling - assigns each record to its start bucket.
+
+    Loses accuracy when records span multiple buckets.
+    """
+    schema_cols = usage.collect_schema().names()
+    group_cols = [c for c in schema_cols if c not in {C.TIMESTAMP, C.COUNT}]
+
+    return (
+        usage.with_columns(pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket"))
+        .group_by(["bucket", *group_cols])
+        .agg(pl.col(C.COUNT).mean())
+        .rename({"bucket": C.TIMESTAMP})
+        .sort([C.TIMESTAMP, *group_cols])
+    )
+
+
+def compute_derived_metrics(df: UsageFrame) -> UsageFrame:
     """Compute available and idle from base metrics.
 
     available = reservable - committed
     idle = committed - used (only if used exists)
     """
-    index_cols = [C.TIMESTAMP, "collector_type"]
+    index_cols = [
+        C.TIMESTAMP,
+        "collector_type",
+        "site",
+    ]
 
     # long to wide
     pivoted = df.collect().pivot(on=C.QUANTITY_TYPE, index=index_cols, values=C.COUNT)
@@ -45,12 +69,12 @@ def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
         )
         .drop_nulls(C.COUNT)
         .lazy()
-    )
+    ).select(["timestamp", "quantity_type", "count", "site", "collector_type"])
 
-    return unpivoted
+    return UsageSchema.validate(unpivoted)
 
 
-def load_facts(input_data: str, site_name: str):
+def load_facts(input_data: str, site_name: str) -> FactFrame:
     base_path = f"{input_data}/{site_name}"
     all_facts = []
     all_facts.append(
@@ -87,57 +111,3 @@ def load_facts(input_data: str, site_name: str):
     all_facts.append(BlazarAllocationAdapter(*blazardata).to_facts())
     facts = pl.concat(all_facts)
     return facts
-
-
-def main():
-    # get data
-
-    for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
-        # load data, convert to facts timeline
-        facts_list = load_facts(input_data="data/raw_spans", site_name=site_name)
-
-        usage_loader = LegacyUsageLoader("data/raw_spans", site_name)
-
-        legacy_usage_series = None
-        try:
-            usage_loader.load_facts()
-            legacy_usage_series = usage_loader.get_usage()
-        except FileNotFoundError:
-            pass
-
-        # process facts, convert to state timeline
-        engine = SegmentBuilder(site_name=site_name, priority_order=[])
-        segments = engine.build(facts_list)
-
-        # process state timeline into usage timeserices
-        usage_timeseries = engine.calculate_concurrency(segments)
-
-        print(
-            usage_timeseries.collect().group_by("collector_type", "quantity_type").len()
-        )
-
-        # reservable_ts = usage_timeseries.filter(
-        #     pl.col("quantity_type") == "reservable"
-        # ).collect()
-        # print(reservable_ts.select(C.TIMESTAMP).describe())
-        # print(
-        #     reservable_ts.select(pl.col(C.TIMESTAMP).dt.truncate("7d")).unique().height
-        # )
-
-        if legacy_usage_series is not None:
-            both_usage = pl.concat([usage_timeseries, legacy_usage_series])
-        else:
-            both_usage = usage_timeseries
-
-        # # resample timeseries for plotting
-        # resampled_usage = engine.resample_time_weighted(both_usage, interval="1d")
-        # print(
-        #     resampled_usage.collect().group_by("collector_type", "quantity_type").len()
-        # )
-
-        # resampled_derived = compute_derived_metrics(resampled_usage)
-        # make_plots(resampled_derived, output_path="output/plots/", site_name=site_name)
-
-
-if __name__ == "__main__":
-    main()

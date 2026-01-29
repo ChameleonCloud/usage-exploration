@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import polars as pl
@@ -24,7 +25,7 @@ class SegmentBuilder:
         self.group_cols = group_cols if group_cols else [C.ENTITY_ID, C.QUANTITY_TYPE]
         self.priority_order = priority_order or [Sources.NOVA, Sources.BLAZAR]
 
-    def build(self, facts: pl.LazyFrame) -> pl.LazyFrame:
+    def build(self, facts: LazyGeneric[FactSchema]) -> LazyGeneric[SegmentSchema]:
         """
         Transformation:
             1. Facts (Raw Logs) -> Events (Resolved Change Log)
@@ -83,40 +84,74 @@ class SegmentBuilder:
                     pl.col(C.TIMESTAMP).shift(-1).over(self.group_cols).alias("end"),
                 ]
             )
-            .filter(pl.col("end").is_not_null())
+            # .filter(pl.col("end").is_not_null()) # keep these, we need null-end segments
             # DELETED exist only to terminate spans, don't start a new one.
             .filter(pl.col("final_state") != States.DELETED)
         )
 
-    def calculate_concurrency(self, segments: pl.LazyFrame) -> pl.LazyFrame:
-        active = segments.filter(pl.col("final_state") == States.ACTIVE)
+    def calculate_concurrency(
+        self,
+        segments: LazyGeneric[SegmentSchema],
+    ) -> LazyGeneric[UsageSchema]:
+        # 1. CREATE SPANS (Enrichment)
+        #    "Host A" becomes "32 VCPUs"
 
-        starts = active.select(
+        # dummy: all resources have tyspe npdes
+        # resource_map = {"nodes"}
+        # spans = segments.join(resource_map, on="entity_id").select(
+        #     ["start", "end", "quantity_type", "value"]
+        # )
+        SENTINEL = datetime(9999, 12, 31)
+        spans = segments.select(
             [
-                *self.group_cols,
-                pl.col("start").alias(C.TIMESTAMP),
-                pl.lit(1).alias(C.DELTA),
+                pl.col("start"),
+                pl.col("end").fill_null(SENTINEL),
+                pl.col("quantity_type"),
+                # pl.lit("nodes").alias("resource_type"),
+                pl.lit(1).alias("value"),
+            ],
+        )
+
+        # 2. CREATE DELTAS (Differentiation)
+        #    "1 nodess" becomes "+1 at Start" and "-1 at End"
+        #    "32 VCPUs" becomes "+32 at Start" and "-32 at End"
+        deltas = pl.concat(
+            [
+                spans.select(
+                    [
+                        pl.col("start").alias("timestamp"),
+                        pl.col("quantity_type"),
+                        pl.col("value").alias("change"),
+                    ]
+                ),
+                spans.select(
+                    [
+                        pl.col("end").alias("timestamp"),
+                        pl.col("quantity_type"),
+                        (pl.col("value") * -1).alias("change"),
+                    ]
+                ),
             ]
         )
-        ends = active.filter(pl.col("end").is_not_null()).select(
-            [
-                *self.group_cols,
-                pl.col("end").alias(C.TIMESTAMP),
-                pl.lit(-1).alias(C.DELTA),
-            ]
-        )
 
-        usage = (
-            pl.concat([starts, ends])
-            .group_by([*self.group_cols, C.TIMESTAMP])
-            .agg(pl.col(C.DELTA).sum())
-            .sort([*self.group_cols, C.TIMESTAMP])
+        # 3. CREATE TOTALS (Integration)
+        #    Sum the changes
+        totals = (
+            deltas.group_by(["timestamp", "quantity_type"])
+            .agg(pl.col("change").sum())
+            .sort(["quantity_type", "timestamp"])
             .with_columns(
-                pl.col(C.DELTA).cum_sum().over(self.group_cols).alias(C.COUNT)
+                pl.col("change")
+                .cum_sum()
+                .over("quantity_type")
+                .cast(pl.Float64)
+                .alias("count")
             )
-        ).with_columns(
-            pl.lit(self.site_name).alias("site"),
-            pl.lit("current").alias("collector_type"),
+            .with_columns(
+                pl.lit(self.site_name).alias("site"),
+                pl.lit("current").alias("collector_type"),
+            )
+            .select(["timestamp", "quantity_type", "count", "site", "collector_type"])
         )
 
-        return UsageSchema.validate(usage)
+        return UsageSchema.validate(totals)

@@ -116,7 +116,11 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
             strokeDash=alt.StrokeDash("collector_type:N"),
         )
         .properties(width=WIDTH, height=120)
-        .facet(row=alt.Row(f"{C.QUANTITY_TYPE}:N", header=alt.Header(labelFontSize=FONT_AXIS_LABEL)))
+        .facet(
+            row=alt.Row(
+                f"{C.QUANTITY_TYPE}:N", header=alt.Header(labelFontSize=FONT_AXIS_LABEL)
+            )
+        )
     )
 
     return fig
@@ -124,11 +128,17 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
 
 def make_plots(usage_timeseries: pl.LazyFrame, output_path: str, site_name: str):
     data_to_plot = usage_timeseries.collect()
+
+    stack_subset = data_to_plot.filter(
+        pl.col("collector_type") == "current",
+        # pl.col("quantity_type") != "occupied",
+        # pl.col("quantity_type") != "committed",
+    )
+    usage_stack_plot(stack_subset).properties(width=WIDTH, height=WIDTH * 0.6).save(
+        f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
+    )
     usage_line_plot(data_to_plot).save(
         f"{output_path}/{site_name}.png", scale_factor=SCALE_FACTOR
-    )
-    usage_stack_plot(data_to_plot).properties(width=WIDTH, height=WIDTH * 0.6).save(
-        f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
     )
     usage_facet_plot(data_to_plot).save(
         f"{output_path}/{site_name}_facet.png", scale_factor=SCALE_FACTOR
