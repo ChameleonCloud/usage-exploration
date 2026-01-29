@@ -37,16 +37,18 @@ def main():
         usage = engine.calculate_concurrency(segments)
         usage.collect_schema()
 
-        # usage_derived = compute_derived_metrics(usage)
-        # usage_derived.collect_schema()
+        usage_derived = compute_derived_metrics(usage)
+        usage_derived.collect_schema()
 
         # combine with legacy if available
         # ensure columns math
         if legacy_usage is not None:
-            usage = pl.concat([usage, legacy_usage])
+            usage_merged = pl.concat([usage_derived, legacy_usage])
+        else:
+            usage_merged = usage_derived
 
         WINDOW_END = datetime(2025, 11, 1)
-        filtered = usage.filter(pl.col("timestamp") < WINDOW_END)
+        filtered = usage_merged.filter(pl.col("timestamp") < WINDOW_END)
 
         # resample and compute derived metrics
         resampled = resample_simple(filtered, interval="30d")
