@@ -59,13 +59,20 @@ class GenericFactAdapter:
         return FactSchema.validate(events)
 
     def to_facts(self) -> LazyGeneric[FactSchema]:
+        # Filter if specified in registry
+        df = self.raw_df
+        if self.cfg.filter_expr is not None:
+            df = df.filter(self.cfg.filter_expr)
+
         # col_map is { Target : Source }
         selection = [
             pl.col(raw_col).alias(std_col)
             for std_col, raw_col in self.cfg.col_map.items()
         ]
         selection.append(pl.lit(self.cfg.source).alias(C.SOURCE))
-        base = self.raw_df.select(selection)
+
+        base = df.select(selection)
+
         return self._expand_events(base)
 
 

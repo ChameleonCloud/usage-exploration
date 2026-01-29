@@ -3,6 +3,7 @@ from enum import Enum, auto
 from typing import List, Optional, Type
 
 import pandera.polars as pa
+import polars as pl
 
 
 class Inputs(Enum):
@@ -22,6 +23,7 @@ class SourceConfig:
     # Map of { StandardColumn : RawColumn }
     # e.g. { C.ENTITY_ID : "hypervisor_hostname" }
     col_map: dict[str, str]
+    filter_expr: pl.Expr | None = None
 
 
 @dataclass

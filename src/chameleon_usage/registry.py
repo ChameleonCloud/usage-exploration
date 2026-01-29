@@ -33,6 +33,20 @@ ADAPTER_REGISTRY = {
             },
         ),
     ),
+    "nova_service": AdapterDef(
+        adapter_class=adapters.GenericFactAdapter,
+        required_inputs=[Inputs.NOVA_SERVICE],
+        config=SourceConfig(
+            quantity_type=QuantityTypes.TOTAL,
+            source=Sources.NOVA,
+            col_map={
+                Cols.ENTITY_ID: "host",
+                Cols.CREATED_AT: "created_at",
+                Cols.DELETED_AT: "deleted_at",
+            },
+            filter_expr=pl.col("binary") == "nova-compute",
+        ),
+    ),
     "nova_instance": AdapterDef(
         adapter_class=adapters.GenericFactAdapter,
         required_inputs=[Inputs.NOVA_INSTANCES],
