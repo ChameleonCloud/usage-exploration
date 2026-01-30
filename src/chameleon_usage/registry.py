@@ -76,31 +76,31 @@ ADAPTER_PRIORITY = [
     ####################
     # Supplemental rules
     ####################
-    generic_cfg(
-        "nova_compute_service",
-        qty_type=QT.TOTAL,
-        required_inputs=[Inputs.NOVA_SERVICE],
-        expr=(pl.col("binary") == "nova-compute"),
-        id_col="host",  # to hypervisor_hostname
-    ),
-    # blazar host implies nova host rule
-    generic_cfg(
-        "blazar_computehost_implies_nova",
-        qty_type=QT.TOTAL,
-        required_inputs=[Inputs.BLAZAR_HOSTS],
-    ),
-    # blazar allocation imples blazar host
-    generic_cfg(
-        "blazar_allocation_implies_host",
-        qty_type=QT.RESERVABLE,
-        required_inputs=[
-            Inputs.BLAZAR_ALLOC,
-            Inputs.BLAZAR_RES,
-            Inputs.BLAZAR_LEASES,
-            Inputs.BLAZAR_HOSTS,
-        ],
-        adapter_class=adapters.BlazarAllocationAdapter,
-    ),
+    # generic_cfg(
+    #     "nova_compute_service",
+    #     qty_type=QT.TOTAL,
+    #     required_inputs=[Inputs.NOVA_SERVICE],
+    #     expr=(pl.col("binary") == "nova-compute"),
+    #     id_col="host",  # to hypervisor_hostname
+    # ),
+    # # blazar host implies nova host rule
+    # generic_cfg(
+    #     "blazar_computehost_implies_nova",
+    #     qty_type=QT.TOTAL,
+    #     required_inputs=[Inputs.BLAZAR_HOSTS],
+    # ),
+    # # blazar allocation imples blazar host
+    # generic_cfg(
+    #     "blazar_allocation_implies_host",
+    #     qty_type=QT.RESERVABLE,
+    #     required_inputs=[
+    #         Inputs.BLAZAR_ALLOC,
+    #         Inputs.BLAZAR_RES,
+    #         Inputs.BLAZAR_LEASES,
+    #         Inputs.BLAZAR_HOSTS,
+    #     ],
+    #     adapter_class=adapters.BlazarAllocationAdapter,
+    # ),
 ]
 ADAPTER_REGISTRY = {d.config.source: d for d in ADAPTER_PRIORITY}
 

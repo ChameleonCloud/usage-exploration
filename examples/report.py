@@ -16,7 +16,6 @@ from chameleon_usage.registry import ADAPTER_PRIORITY, load_facts
 
 # used as SENTINEL for null spans, clips
 # used as boundary for non-null events, filters
-WINDOW_END = datetime(2025, 11, 1)
 
 
 def counts_by_source(facts: pl.LazyFrame) -> pl.LazyFrame:
@@ -35,6 +34,10 @@ def counts_by_source(facts: pl.LazyFrame) -> pl.LazyFrame:
             pl.col("change").cum_sum().over(["quantity_type", "source"]).alias("count")
         )
     )
+
+
+WINDOW_END = datetime(2025, 11, 1)
+BUCKET_LENGTH = "30d"
 
 
 def main():
@@ -67,7 +70,7 @@ def main():
         current_filtered = usage.filter(pl.col("timestamp") <= WINDOW_END)
 
         # resample to consistent time steps across all columns
-        current_resampled = resample_simple(current_filtered, interval="90d")
+        current_resampled = resample_simple(current_filtered, BUCKET_LENGTH)
         current = compute_derived_metrics(UsageSchema.validate(current_resampled))
 
         # legacy usage pipeline
@@ -78,7 +81,7 @@ def main():
             legacy = (
                 loader.get_usage()
                 .filter(pl.col("timestamp") <= WINDOW_END)
-                .pipe(resample_simple, interval="7d")
+                .pipe(resample_simple, interval=BUCKET_LENGTH)
             )
         except FileNotFoundError:
             pass
