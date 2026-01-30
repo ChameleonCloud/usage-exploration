@@ -77,7 +77,7 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
 def usage_line_plot(data: pl.DataFrame) -> alt.FacetChart:
     fig = (
         alt.Chart(data)
-        .mark_line(interpolate="step-after")
+        .mark_line(strokeWidth=1, interpolate="step-after")
         .encode(
             x=alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
             y=alt.Y(f"{C.COUNT}:Q"),
@@ -100,7 +100,7 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.VConcatChart:
         qty_color = QTY_COLORS[qty_type]
         chart = (
             alt.Chart(subset)
-            .mark_line(interpolate="step-after")
+            .mark_line(strokeWidth=1, interpolate="step-after")
             .encode(
                 x=alt.X(
                     f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")
