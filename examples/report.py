@@ -37,7 +37,7 @@ def counts_by_source(facts: pl.LazyFrame) -> pl.LazyFrame:
 
 
 WINDOW_END = datetime(2025, 11, 1)
-BUCKET_LENGTH = "30d"
+BUCKET_LENGTH = "7d"
 
 
 def main():
@@ -91,6 +91,19 @@ def main():
             resampled = pl.concat([current, legacy], how="diagonal")
         else:
             resampled = current
+
+        print(resampled.collect())
+        # filter out derived metrics
+        resampled = resampled.filter(
+            pl.col("quantity_type").is_in(
+                [
+                    "total",
+                    "reservable",
+                    "committed",
+                    "occupied",
+                ]
+            )
+        )
 
         make_plots(resampled, output_path="output/plots/", site_name=site_name)
 
