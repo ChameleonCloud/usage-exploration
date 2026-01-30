@@ -13,6 +13,61 @@ Primary features:
 2. Must be auditable: understand *why* data was transformed, and trace decisions to impact on output
 3. Must be explicit and understandable. No magic, and no "write once, read never" code.
 
+## Architecture
+
+```
+┌──────────────┐ ┌───────────┐ ┌───────────────────┐ ┌────────────┐
+│ openstack db │ │ backup db │ │ legacy usage data │ │ prometheus │
+└──────┬───────┘ └─────┬─────┘ └─────────┬─────────┘ └──────┬─────┘
+       │               │                 │                  │
+       └───────────────┴────────┬────────┴──────────────────┘
+                                │
+                                ▼
+                        ┌───────────────┐
+                        │  data loader  │
+                        └───────┬───────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │  folders of parquet   │
+                    └───────────┬───────────┘
+                                │
+                                ▼
+              ┌─────────────────────────────────────────┐
+              │  load tables, apply convenience schema  │
+              └──────────────────┬──────────────────────┘
+                                 │
+                 ┌───────────────┴───────────────┐
+                 │                               │
+                 ▼                               ▼
+    ┌────────────────────────┐      ┌───────────────────────┐
+    │  parse observation     │      │  map leases →         │
+    │  events                │      │  lead times           │
+    └───────────┬────────────┘      └───────────────────────┘
+                │
+                ▼
+    ┌────────────────────────────────────────────────────────────────────┐
+    │  map events → timelines: join sources, group by id, sum by type    │
+    ├────────────────────────────────────────────────────────────────────┤
+    │                                                                    │
+    │  ┌───────────────────┐                                             │
+    │  │ nova hosts        │──┐                                          │
+    │  │ blazar hosts      │  │                                          │
+    │  │ blazar allocs     │  ├──► join on hypervisor_hostname ──► total │
+    │  │ nova instances    │  │                                 capacity │
+    │  │ ...               │──┤                                          │
+    │  └───────────────────┘  │                                          │
+    │                         ├──► join on hypervisor_hostname ──► reserv.
+    │                         │                                  capacity│
+    │                         │                                          │
+    │                         ├──► join on allocation_id ──► allocated   │
+    │                         │                             capacity     │
+    │                         │                                          │
+    │                         └──► join on instance_uuid ──► used        │
+    │                                                        capacity    │
+    └────────────────────────────────────────────────────────────────────┘
+```
+
 ## Data Model
 
 ### Utilization Stack
