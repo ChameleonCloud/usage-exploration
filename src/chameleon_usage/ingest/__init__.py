@@ -80,29 +80,16 @@ def load_intervals(base_path: str, site_name: str) -> pl.LazyFrame:
     occupied = intervals.filter(pl.col("quantity_type").eq("occupied"))
 
     clamped_reservable = apply_temporal_clamp(
-        reservable,
-        validators=total,
-        join_keys=["hypervisor_hostname"],
-        # buffer=None,
+        reservable, parents=total, join_keys=["hypervisor_hostname"]
     )
-
     clamped_committed = apply_temporal_clamp(
-        committed,
-        validators=reservable,
-        join_keys=["blazar_host_id"],
-        # buffer=None,
+        committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
     )
-
     clamped_occupied = apply_temporal_clamp(
         occupied,
-        validators=committed,
+        parents=clamped_committed,
         join_keys=["blazar_reservation_id", "hypervisor_hostname"],
-        # buffer=None,
     )
-
-    print(total.collect())
-    print(reservable.collect())
-    print(clamped_reservable.collect())
 
     return pl.concat(
         [total, clamped_reservable, clamped_committed, clamped_occupied],

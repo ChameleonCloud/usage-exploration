@@ -28,6 +28,7 @@ Contract:
 
 5. COLUMNS: All child columns preserved. No validator columns leak through.
 """
+
 from datetime import datetime
 
 import polars as pl
@@ -210,33 +211,41 @@ def test_matches_most_recent_validator_era():
 
 
 def test_extra_columns_preserved():
-    target = pl.LazyFrame({
-        "start": [dt(10)],
-        "end": [dt(20)],
-        "key": ["A"],
-        "extra": ["keep_me"],
-    })
-    validators = pl.LazyFrame({
-        "start": [dt(5)],
-        "end": [dt(25)],
-        "key": ["A"],
-    })
+    target = pl.LazyFrame(
+        {
+            "start": [dt(10)],
+            "end": [dt(20)],
+            "key": ["A"],
+            "extra": ["keep_me"],
+        }
+    )
+    validators = pl.LazyFrame(
+        {
+            "start": [dt(5)],
+            "end": [dt(25)],
+            "key": ["A"],
+        }
+    )
     result = apply_temporal_clamp(target, validators, ["key"]).collect()
     assert result["extra"][0] == "keep_me"
 
 
 def test_validator_columns_not_leaked():
-    target = pl.LazyFrame({
-        "start": [dt(10)],
-        "end": [dt(20)],
-        "key": ["A"],
-    })
-    validators = pl.LazyFrame({
-        "start": [dt(5)],
-        "end": [dt(25)],
-        "key": ["A"],
-        "validator_only": ["should_not_appear"],
-    })
+    target = pl.LazyFrame(
+        {
+            "start": [dt(10)],
+            "end": [dt(20)],
+            "key": ["A"],
+        }
+    )
+    validators = pl.LazyFrame(
+        {
+            "start": [dt(5)],
+            "end": [dt(25)],
+            "key": ["A"],
+            "validator_only": ["should_not_appear"],
+        }
+    )
     result = apply_temporal_clamp(target, validators, ["key"]).collect()
     assert "validator_only" not in result.columns
     assert "val_start" not in result.columns
