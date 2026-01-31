@@ -56,10 +56,16 @@ class NovaServiceRaw(pa.DataFrameModel):
 
 class NovaInstanceRaw(pa.DataFrameModel):
     id: str = pa.Field(unique=True, coerce=True)
+    uuid: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     host: str = pa.Field()
     node: str = pa.Field()
+
+
+class NovaRequestSpecRaw(pa.DataFrameModel):
+    instance_uuid: str = pa.Field()
+    spec: str = pa.Field()
 
 
 class NodeUsageReportCache(pa.DataFrameModel):

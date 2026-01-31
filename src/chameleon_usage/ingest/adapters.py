@@ -73,6 +73,27 @@ def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
             ),
             pl.min_horizontal("end_date", "deleted_at_lease").alias("effective_end"),
         )
-        .filter(pl.col("hypervisor_hostname").is_not_null())
         .filter(pl.col("effective_start") <= pl.col("effective_end"))
+        # .filter(pl.col("hypervisor_hostname").is_not_null())
+    )
+
+
+def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
+    """Load instances with blazar reservation_id from request_specs."""
+    instances = tables[Tables.NOVA_INSTANCES]
+
+    # Extract blazar reservation_id from request_specs JSON
+    # The key is literally "nova_object.data" (dot in key name), not nested
+    request_specs = tables[Tables.NOVA_REQUEST_SPECS].select(
+        pl.col("instance_uuid"),
+        pl.col("spec")
+        .str.json_path_match("$['nova_object.data'].scheduler_hints.reservation[0]")
+        .alias("blazar_reservation_id"),
+    )
+
+    return instances.join(
+        request_specs,
+        left_on="uuid",
+        right_on="instance_uuid",
+        how="left",
     )

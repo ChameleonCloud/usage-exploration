@@ -5,11 +5,12 @@ Constants defined in one place for reuse.
 
 class Tables:
     NOVA_HOSTS = "nova_hosts"
+    NOVA_INSTANCES = "nova_instances"
+    NOVA_REQUEST_SPECS = "nova_request_specs"
     BLAZAR_HOSTS = "blazar_hosts"
     BLAZAR_ALLOC = "blazar_alloc"
     BLAZAR_RES = "blazar_res"
     BLAZAR_LEASES = "blazar_leases"
-    NOVA_INSTANCES = "nova_instances"
 
 
 class QuantityTypes:

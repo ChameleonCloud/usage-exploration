@@ -17,12 +17,36 @@ WINDOW_END = datetime(2025, 11, 1)
 BUCKET_LENGTH = "7d"
 
 
-def main():
-    for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
-        # Load intervals from raw data
-        intervals = load_intervals("data/raw_spans", site_name)
+def inspect_intervals(intervals: pl.LazyFrame, site_name: str) -> None:
+    """Print unique value counts per column, grouped by site and quantity_type."""
+    df = intervals.collect()
 
-        # Pipeline: intervals → counts → resample → derived metrics
+    print(f"\n{'=' * 60}")
+    print(f"INTERVALS: {site_name}")
+    print(f"{'=' * 60}")
+
+    for qt in df["quantity_type"].unique().sort().to_list():
+        subset = df.filter(pl.col("quantity_type") == qt)
+        print(f"\n  {qt}: {subset.height} rows")
+
+        for col in sorted(df.columns):
+            if col in ["start", "end"]:
+                continue
+            n_unique = subset[col].n_unique()
+            n_null = subset[col].null_count()
+            print(f"    {col}: {n_unique} unique, {n_null} null")
+
+
+def main():
+    # for site_name in ["chi_uc", "chi_tacc", "kvm_tacc"]:
+    for site_name in [
+        "chi_tacc",
+    ]:
+        # Stage 1: Load intervals (pre-cumsum)
+        intervals = load_intervals("data/raw_spans", site_name)
+        # inspect_intervals(intervals, site_name)
+
+        # Stage 2: Pipeline - intervals → counts → resample → derived metrics
         usage = (
             intervals_to_counts(intervals)
             .filter(pl.col("timestamp") <= WINDOW_END)
@@ -30,13 +54,6 @@ def main():
             .pipe(compute_derived_metrics)
             .pipe(add_site_context, site_name)
         )
-
-        # # Filter to base metrics for plotting
-        # usage_filtered = usage.filter(
-        #     pl.col("quantity_type").is_in([
-        #         "total", "reservable", "committed", "occupied"
-        #     ])
-        # )
 
         print(f"\n{site_name}:")
         print(usage.collect())
