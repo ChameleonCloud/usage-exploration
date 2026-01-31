@@ -38,7 +38,7 @@ class AdapterRegistry:
 
     def to_intervals(self, tables: RawTables) -> pl.LazyFrame:
         intervals = [self._convert(a.source(tables), a) for a in self.adapters]
-        return IntervalSchema.validate(pl.concat(intervals))
+        return IntervalSchema.validate(pl.concat(intervals, how="diagonal"))
 
 
 def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
