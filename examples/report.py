@@ -6,10 +6,10 @@ import polars as pl
 
 from chameleon_usage.ingest import load_intervals
 from chameleon_usage.pipeline import (
+    add_site_context,
+    compute_derived_metrics,
     intervals_to_counts,
     resample,
-    compute_derived_metrics,
-    add_site_context,
 )
 from chameleon_usage.viz.plots import make_plots
 
@@ -31,17 +31,17 @@ def main():
             .pipe(add_site_context, site_name)
         )
 
-        # Filter to base metrics for plotting
-        usage_filtered = usage.filter(
-            pl.col("quantity_type").is_in([
-                "total", "reservable", "committed", "occupied"
-            ])
-        )
+        # # Filter to base metrics for plotting
+        # usage_filtered = usage.filter(
+        #     pl.col("quantity_type").is_in([
+        #         "total", "reservable", "committed", "occupied"
+        #     ])
+        # )
 
         print(f"\n{site_name}:")
-        print(usage_filtered.collect())
+        print(usage.collect())
 
-        make_plots(usage_filtered, output_path="output/plots/", site_name=site_name)
+        make_plots(usage, output_path="output/plots/", site_name=site_name)
 
 
 if __name__ == "__main__":
