@@ -15,11 +15,6 @@ class QuantityTypes:
     IDLE = "idle"
 
 
-class States:
-    ACTIVE = "active"
-    DELETED = "deleted"
-
-
 class Cols:
     """
     Use these instead of magic strings.

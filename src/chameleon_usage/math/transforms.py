@@ -59,3 +59,25 @@ def intervals_to_counts(
     deltas = intervals_to_deltas(df, start_col, end_col, group_cols)
     counts = deltas_to_counts(deltas, group_cols)
     return counts
+
+
+def resample(
+    df: pl.LazyFrame,
+    timestamp_col: str,
+    value_col: str,
+    interval: str,
+    group_cols: list[str],
+) -> pl.LazyFrame:
+    """Resample time series to regular intervals.
+
+    Assigns each record to its start bucket and averages values.
+    TODO: how are nulls handled?
+    TODO: Are timestamps aligned between group_cols?
+    """
+    return (
+        df.with_columns(pl.col(timestamp_col).dt.truncate(interval).alias("_bucket"))
+        .group_by(["_bucket", *group_cols])
+        .agg(pl.col(value_col).mean())
+        .rename({"_bucket": timestamp_col})
+        .sort([timestamp_col, *group_cols])
+    )

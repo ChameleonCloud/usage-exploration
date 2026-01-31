@@ -1,48 +1,44 @@
+"""Domain-aware pipeline wrappers with validation."""
+
 import polars as pl
 
-from chameleon_usage.constants import Cols as C
+from chameleon_usage.math import transforms
+from chameleon_usage.schemas import IntervalSchema, CountSchema, UsageSchema
 from chameleon_usage.constants import QuantityTypes as QT
-from chameleon_usage.models.domain import (
-    UsageSchema,
-)
 
 
-def resample_simple(usage: pl.LazyFrame, interval: str = "1d") -> pl.LazyFrame:
-    """Simple resampling - assigns each record to its start bucket.
+def intervals_to_counts(df: pl.LazyFrame) -> pl.LazyFrame:
+    """Validated wrapper: intervals → counts."""
+    IntervalSchema.validate(df)
+    result = transforms.intervals_to_counts(df, "start", "end", ["quantity_type"])
+    return CountSchema.validate(result)
 
-    Loses accuracy when records span multiple buckets.
-    """
-    schema_cols = usage.collect_schema().names()
-    group_cols = [c for c in schema_cols if c not in {C.TIMESTAMP, C.COUNT}]
 
-    return (
-        usage.with_columns(pl.col(C.TIMESTAMP).dt.truncate(interval).alias("bucket"))
-        .group_by(["bucket", *group_cols])
-        .agg(pl.col(C.COUNT).mean())
-        .rename({"bucket": C.TIMESTAMP})
-        .sort([C.TIMESTAMP, *group_cols])
-    )
+def resample(df: pl.LazyFrame, interval: str = "1d") -> pl.LazyFrame:
+    """Validated wrapper: resample counts to regular intervals."""
+    CountSchema.validate(df)
+    result = transforms.resample(df, "timestamp", "count", interval, ["quantity_type"])
+    return CountSchema.validate(result)
 
 
 def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
     """Compute available and idle from base metrics.
 
     available = reservable - committed
-    idle = committed - used (only if used exists)
+    idle = committed - occupied
     """
-    index_cols = [
-        C.TIMESTAMP,
-        "collector_type",
-        "site",
-    ]
+    CountSchema.validate(df)
 
-    # long to wide
-    pivoted = df.collect().pivot(on=C.QUANTITY_TYPE, index=index_cols, values=C.COUNT)
+    index_cols = ["timestamp"]
 
-    # only know these after pivot
+    # Long to wide
+    pivoted = df.collect().pivot(
+        on="quantity_type", index=index_cols, values="count"
+    )
+
     cols = pivoted.columns
 
-    # simple subtraction
+    # Compute derived
     if QT.RESERVABLE in cols and QT.COMMITTED in cols:
         pivoted = pivoted.with_columns(
             (pl.col(QT.RESERVABLE) - pl.col(QT.COMMITTED)).alias(QT.AVAILABLE),
@@ -53,13 +49,25 @@ def compute_derived_metrics(df: pl.LazyFrame) -> pl.LazyFrame:
             (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
         )
 
-    # wide to long
-    unpivoted = (
+    # Wide to long
+    result = (
         pivoted.unpivot(
-            index=index_cols, variable_name=C.QUANTITY_TYPE, value_name=C.COUNT
+            index=index_cols, variable_name="quantity_type", value_name="count"
         )
-        .drop_nulls(C.COUNT)
+        .drop_nulls("count")
         .lazy()
-    ).select(["timestamp", "quantity_type", "count", "site", "collector_type"])
+    )
 
-    return UsageSchema.validate(unpivoted)
+    return CountSchema.validate(result)
+
+
+def add_site_context(
+    df: pl.LazyFrame, site: str, collector_type: str = "current"
+) -> pl.LazyFrame:
+    """Add site and collector_type columns for UsageSchema."""
+    CountSchema.validate(df)
+    result = df.with_columns(
+        pl.lit(site).alias("site"),
+        pl.lit(collector_type).alias("collector_type"),
+    )
+    return UsageSchema.validate(result)

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.core.intervals import (
+from chameleon_usage.math.transforms import (
     deltas_to_counts,
     intervals_to_counts,
     intervals_to_deltas,
