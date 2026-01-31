@@ -5,11 +5,13 @@ tags each row with an audit status explaining the result.
 
 Contract:
 ---------
-1. MATCHING: Each child is matched to a parent by join_keys. If multiple parents
-   exist for the same key, match the parent whose start is most recent but
-   still <= child.start.
+1. MATCHING: Each child is matched to ALL parents it overlaps (by join_keys).
+   A child overlaps a parent if their intervals intersect:
+   - child.start < parent.end (or parent.end is null)
+   - child.end > parent.start (or child.end is null)
+   One output row per (child, parent) overlap.
 
-2. CLAMPING: For matched children, clamp [start, end] to [parent.start, parent.end]:
+2. CLAMPING: For each overlap, clamp to the intersection:
    - start = max(child.start, parent.start)
    - end = min(child.end, parent.end)  # null treated as infinity
 
@@ -17,16 +19,15 @@ Contract:
    - original_start : child's start before clamping
    - original_end   : child's end before clamping
    - coerce_status  : one of:
-       "null_parent"  : join key was null, cannot match
-       "no_parent"    : no parent found with matching join key
-       "no_overlap"   : matched parent, but child.start >= parent.end
-       "clamped"      : matched and adjusted (start or end changed)
-       "valid"        : fully contained, no adjustment needed
+       "null_parent" : join key was null, cannot match
+       "no_parent"   : no parent found for this join key
+       "clamped"     : interval was clipped to fit parent
+       "valid"       : fully contained, no adjustment needed
 
-4. NO FILTERING: All rows preserved. Downstream decides what to do with
-   invalid rows based on coerce_status.
+4. NO FILTERING: Children with no overlapping parent are preserved with
+   "no_parent" status. Downstream decides what to do.
 
-5. COLUMNS: All child columns preserved. No validator columns leak through.
+5. COLUMNS: All child columns preserved. No parent columns leak through.
 """
 
 from datetime import datetime
@@ -115,7 +116,8 @@ def test_no_parent_key_mismatch():
     assert result["original_end"][0] == dt(20)
 
 
-def test_no_parent_child_before_all_validators():
+def test_no_parent_child_ends_before_all_parents():
+    """Child ends before any parent starts, no overlap."""
     result = clamp(
         {"start": [dt(5)], "end": [dt(8)], "key": ["A"]},
         {"start": [dt(10)], "end": [dt(25)], "key": ["A"]},
@@ -123,25 +125,37 @@ def test_no_parent_child_before_all_validators():
     assert result["coerce_status"][0] == "no_parent"
 
 
-# --- Status: no_overlap ---
+def test_early_starter_overlaps_first_parent():
+    """Child starts before parent but overlaps it."""
+    result = clamp(
+        {"start": [dt(5)], "end": [dt(15)], "key": ["A"]},
+        {"start": [dt(10)], "end": [dt(25)], "key": ["A"]},
+    )
+    assert len(result) == 1
+    assert result["coerce_status"][0] == "clamped"
+    assert result["start"][0] == dt(10)
+    assert result["end"][0] == dt(15)
 
 
-def test_no_overlap_child_starts_after_parent_ends():
+# --- No overlap -> no_parent ---
+
+
+def test_no_parent_child_after_all_parents():
     result = clamp(
         {"start": [dt(26)], "end": [dt(28)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "no_overlap"
+    assert result["coerce_status"][0] == "no_parent"
     assert result["original_start"][0] == dt(26)
     assert result["original_end"][0] == dt(28)
 
 
-def test_no_overlap_child_starts_exactly_at_parent_end():
+def test_no_parent_child_starts_exactly_at_parent_end():
     result = clamp(
         {"start": [dt(25)], "end": [dt(30)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "no_overlap"
+    assert result["coerce_status"][0] == "no_parent"
 
 
 # --- Status: null_parent ---
@@ -189,10 +203,11 @@ def test_both_null_end_stays_null():
     assert result["end"][0] is None
 
 
-# --- Multiple validators (era matching) ---
+# --- Multiple parent eras ---
 
 
-def test_matches_most_recent_validator_era():
+def test_child_overlaps_one_of_multiple_eras():
+    """Child only overlaps second era, produces one row."""
     result = clamp(
         {"start": [dt(15)], "end": [dt(20)], "key": ["A"]},
         {
@@ -205,6 +220,62 @@ def test_matches_most_recent_validator_era():
     assert result["coerce_status"][0] == "valid"
     assert result["start"][0] == dt(15)
     assert result["end"][0] == dt(20)
+
+
+def test_child_spans_multiple_eras():
+    """Child overlaps both eras, produces two rows."""
+    result = clamp(
+        {"start": [dt(5)], "end": [dt(20)], "key": ["A"]},
+        {
+            "start": [dt(1), dt(15)],
+            "end": [dt(10), dt(25)],
+            "key": ["A", "A"],
+        },
+    )
+    assert len(result) == 2
+    # First row: clamped to era1 [1-10], child is [5-20] -> [5-10]
+    row1 = result.filter(pl.col("end") == dt(10))
+    assert row1["start"][0] == dt(5)
+    assert row1["coerce_status"][0] == "clamped"
+    # Second row: clamped to era2 [15-25], child is [5-20] -> [15-20]
+    row2 = result.filter(pl.col("start") == dt(15))
+    assert row2["end"][0] == dt(20)
+    assert row2["coerce_status"][0] == "clamped"
+
+
+def test_early_starter_null_end_spans_multiple_eras():
+    """Child starts before all parents, null end, spans all eras."""
+    result = clamp(
+        {"start": [dt(1)], "end": [None], "key": ["A"]},
+        {
+            "start": [dt(5), dt(15)],
+            "end": [dt(10), dt(25)],
+            "key": ["A", "A"],
+        },
+    )
+    assert len(result) == 2
+    # First row: [5-10]
+    row1 = result.filter(pl.col("end") == dt(10))
+    assert row1["start"][0] == dt(5)
+    assert row1["coerce_status"][0] == "clamped"
+    # Second row: [15-25]
+    row2 = result.filter(pl.col("start") == dt(15))
+    assert row2["end"][0] == dt(25)
+    assert row2["coerce_status"][0] == "clamped"
+
+
+def test_child_in_gap_between_eras():
+    """Child falls entirely in gap between eras, no overlap."""
+    result = clamp(
+        {"start": [dt(11)], "end": [dt(14)], "key": ["A"]},
+        {
+            "start": [dt(5), dt(15)],
+            "end": [dt(10), dt(25)],
+            "key": ["A", "A"],
+        },
+    )
+    assert len(result) == 1
+    assert result["coerce_status"][0] == "no_parent"
 
 
 # --- Column preservation ---
