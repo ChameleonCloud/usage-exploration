@@ -16,8 +16,8 @@ from chameleon_usage.pipeline import (
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.plots import make_plots
 
-TIME_RANGE = (datetime(2016, 1, 1), datetime(2025, 9, 1))
-BUCKET_LENGTH = "1d"
+TIME_RANGE = (datetime(2016, 1, 1), datetime(2025, 1, 1))
+BUCKET_LENGTH = "30d"
 
 
 def main():
@@ -68,7 +68,12 @@ def main():
     usage = resample(derived, BUCKET_LENGTH, spec)
 
     for site_name in SITE_NAMES:
-        subset = usage.filter(pl.col("site").eq(site_name))
+        subset = usage.filter(
+            pl.col("site").eq(site_name),
+            pl.col("quantity_type").is_in(
+                ["total", "reservable", "available", "idle", "occupied"],
+            ),
+        )
         make_plots(subset, output_path="output/plots/", site_name=site_name)
 
     # usage_with_context = add_site_context(usage, spec, site_name)
