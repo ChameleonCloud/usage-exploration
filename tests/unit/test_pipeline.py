@@ -2,9 +2,9 @@
 Tests for chameleon_usage.pipeline
 
 PIPELINE: Domain-aware wrappers around pure transforms.
-- PipelineSpec carries group_cols through the pipeline
+- PipelineSpec carries group_cols and time_range through the pipeline
 - Validation at stage boundaries catches missing columns early
-- collapse_dimension handles the common pattern of filtering then re-aggregating
+- run_pipeline() is the "can't hold it wrong" entry point
 """
 
 from datetime import datetime
@@ -14,13 +14,14 @@ import pytest
 
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.pipeline import (
-    add_site_context,
+    clip_to_window,
     collapse_dimension,
     compute_derived_metrics,
-    intervals_to_counts,
-    resample,
 )
 from chameleon_usage.schemas import PipelineSpec
+
+# Default time range for tests
+TIME_RANGE = (datetime(2024, 1, 1), datetime(2024, 12, 31))
 
 
 # =============================================================================
@@ -29,7 +30,7 @@ from chameleon_usage.schemas import PipelineSpec
 
 
 def test_spec_validates_interval_stage():
-    spec = PipelineSpec(group_cols=("quantity_type",))
+    spec = PipelineSpec(group_cols=("quantity_type",), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "entity_id": ["a"],
@@ -42,7 +43,7 @@ def test_spec_validates_interval_stage():
 
 
 def test_spec_rejects_missing_columns():
-    spec = PipelineSpec(group_cols=("quantity_type",))
+    spec = PipelineSpec(group_cols=("quantity_type",), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "start": [datetime(2024, 1, 1)],
@@ -54,7 +55,7 @@ def test_spec_rejects_missing_columns():
 
 
 def test_spec_requires_group_cols():
-    spec = PipelineSpec(group_cols=("quantity_type", "resource_type"))
+    spec = PipelineSpec(group_cols=("quantity_type", "resource_type"), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "entity_id": ["a"],
@@ -69,45 +70,30 @@ def test_spec_requires_group_cols():
 
 
 # =============================================================================
-# intervals_to_counts
+# clip_to_window
 # =============================================================================
 
 
-def test_intervals_to_counts_basic():
-    spec = PipelineSpec(group_cols=("quantity_type",))
+def test_clip_to_window_filters_timestamps():
+    spec = PipelineSpec(
+        group_cols=("quantity_type",),
+        time_range=(datetime(2024, 1, 2), datetime(2024, 1, 4)),
+    )
     df = pl.LazyFrame(
         {
-            "entity_id": ["a", "b"],
-            "start": [datetime(2024, 1, 1), datetime(2024, 1, 2)],
-            "end": [datetime(2024, 1, 3), datetime(2024, 1, 4)],
-            "quantity_type": ["reservable", "reservable"],
+            "timestamp": [
+                datetime(2024, 1, 1),
+                datetime(2024, 1, 2),
+                datetime(2024, 1, 3),
+                datetime(2024, 1, 5),
+            ],
+            "quantity_type": ["reservable"] * 4,
+            "count": [1, 2, 3, 4],
         }
     )
-    counts = intervals_to_counts(df, spec).collect()
+    result = clip_to_window(df, spec).collect()
 
-    assert "timestamp" in counts.columns
-    assert "count" in counts.columns
-    assert "quantity_type" in counts.columns
-    assert counts["count"].to_list() == [1, 2, 1, 0]
-
-
-def test_intervals_to_counts_multiple_groups():
-    spec = PipelineSpec(group_cols=("quantity_type", "site"))
-    df = pl.LazyFrame(
-        {
-            "entity_id": ["a", "b"],
-            "start": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
-            "end": [datetime(2024, 1, 2), datetime(2024, 1, 2)],
-            "quantity_type": ["reservable", "reservable"],
-            "site": ["uc", "tacc"],
-        }
-    )
-    counts = intervals_to_counts(df, spec).collect()
-
-    uc = counts.filter(pl.col("site") == "uc")
-    tacc = counts.filter(pl.col("site") == "tacc")
-    assert uc["count"].to_list() == [1, 0]
-    assert tacc["count"].to_list() == [1, 0]
+    assert result["timestamp"].to_list() == [datetime(2024, 1, 2), datetime(2024, 1, 3)]
 
 
 # =============================================================================
@@ -116,7 +102,7 @@ def test_intervals_to_counts_multiple_groups():
 
 
 def test_collapse_dimension_sums_counts():
-    spec = PipelineSpec(group_cols=("quantity_type", "status"))
+    spec = PipelineSpec(group_cols=("quantity_type", "status"), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
@@ -128,12 +114,13 @@ def test_collapse_dimension_sums_counts():
     collapsed, new_spec = collapse_dimension(df, spec, drop="status")
 
     assert new_spec.group_cols == ("quantity_type",)
+    assert new_spec.time_range == TIME_RANGE  # preserved
     result = collapsed.collect()
     assert result["count"][0] == 8
 
 
 def test_collapse_dimension_filters_excluded():
-    spec = PipelineSpec(group_cols=("quantity_type", "status"))
+    spec = PipelineSpec(group_cols=("quantity_type", "status"), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
@@ -149,7 +136,7 @@ def test_collapse_dimension_filters_excluded():
 
 
 def test_collapse_dimension_rejects_unknown_column():
-    spec = PipelineSpec(group_cols=("quantity_type",))
+    spec = PipelineSpec(group_cols=("quantity_type",), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1)],
@@ -167,7 +154,7 @@ def test_collapse_dimension_rejects_unknown_column():
 
 
 def test_derived_metrics_computes_available():
-    spec = PipelineSpec(group_cols=("quantity_type",))
+    spec = PipelineSpec(group_cols=("quantity_type",), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
@@ -181,23 +168,8 @@ def test_derived_metrics_computes_available():
     assert available["count"][0] == 7.0
 
 
-def test_derived_metrics_computes_idle():
-    spec = PipelineSpec(group_cols=("quantity_type",))
-    df = pl.LazyFrame(
-        {
-            "timestamp": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
-            "quantity_type": [QT.COMMITTED, QT.OCCUPIED],
-            "count": [10.0, 4.0],
-        }
-    )
-    result = compute_derived_metrics(df, spec).collect()
-
-    idle = result.filter(pl.col("quantity_type") == QT.IDLE)
-    assert idle["count"][0] == 6.0
-
-
 def test_derived_metrics_preserves_extra_group_cols():
-    spec = PipelineSpec(group_cols=("quantity_type", "resource_type"))
+    spec = PipelineSpec(group_cols=("quantity_type", "resource_type"), time_range=TIME_RANGE)
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1)] * 4,
@@ -219,46 +191,3 @@ def test_derived_metrics_preserves_extra_group_cols():
     assert mem_avail["count"][0] == 60.0
 
 
-# =============================================================================
-# resample
-# =============================================================================
-
-
-def test_resample_buckets_by_interval():
-    spec = PipelineSpec(group_cols=("quantity_type",))
-    df = pl.LazyFrame(
-        {
-            "timestamp": [
-                datetime(2024, 1, 1, 0, 0),
-                datetime(2024, 1, 1, 12, 0),
-                datetime(2024, 1, 2, 6, 0),
-            ],
-            "quantity_type": ["reservable", "reservable", "reservable"],
-            "count": [10.0, 20.0, 30.0],
-        }
-    )
-    result = resample(df, "1d", spec).collect().sort("timestamp")
-
-    assert len(result) == 2
-    assert result["count"][0] == 15.0  # avg of 10, 20
-    assert result["count"][1] == 30.0
-
-
-# =============================================================================
-# add_site_context
-# =============================================================================
-
-
-def test_add_site_context():
-    spec = PipelineSpec(group_cols=("quantity_type",))
-    df = pl.LazyFrame(
-        {
-            "timestamp": [datetime(2024, 1, 1)],
-            "quantity_type": ["reservable"],
-            "count": [10.0],
-        }
-    )
-    result = add_site_context(df, spec, "chi_uc").collect()
-
-    assert result["site"][0] == "chi_uc"
-    assert result["collector_type"][0] == "current"

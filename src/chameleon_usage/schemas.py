@@ -1,6 +1,7 @@
 """Pipeline schemas for stage boundary validation."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 import pandera.polars as pa
 import polars as pl
@@ -9,9 +10,13 @@ from pandera.typing.polars import LazyFrame
 
 @dataclass
 class PipelineSpec:
-    """Defines column requirements at each stage."""
+    """Pipeline configuration: grouping and time window.
 
-    group_cols: tuple[str, ...]  # immutable, set once
+    Both fields are immutable - set once at pipeline start.
+    """
+
+    group_cols: tuple[str, ...]  # immutable
+    time_range: tuple[datetime, datetime]  # immutable, (start, end)
 
     @property
     def interval_required(self) -> set[str]:
