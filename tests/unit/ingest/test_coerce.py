@@ -1,7 +1,7 @@
 """Tests for apply_temporal_clamp.
 
 apply_temporal_clamp clips child intervals to fit within parent windows and
-tags each row with an audit status explaining the result.
+tags each row with audit columns explaining the result.
 
 Contract:
 ---------
@@ -18,14 +18,15 @@ Contract:
 3. AUDIT COLUMNS:
    - original_start : child's start before clamping
    - original_end   : child's end before clamping
-   - coerce_status  : one of:
-       "null_parent" : join key was null, cannot match
-       "no_parent"   : no parent found for this join key
-       "clamped"     : interval was clipped to fit parent
-       "valid"       : fully contained, no adjustment needed
+   - valid          : True if usable, False if orphan/null_key
+   - coerce_action  : one of:
+       "null_key" : join key was null, cannot match
+       "orphan"   : no parent found for this join key
+       "clipped"  : interval was clipped to fit parent
+       "none"     : fully contained, no adjustment needed
 
 4. NO FILTERING: Children with no overlapping parent are preserved with
-   "no_parent" status. Downstream decides what to do.
+   valid=False, coerce_action="orphan". Downstream filters on `valid`.
 
 5. COLUMNS: All child columns preserved. No parent columns leak through.
 """
@@ -56,14 +57,15 @@ def test_valid_child_inside_parent():
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
     assert len(result) == 1
-    assert result["coerce_status"][0] == "valid"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "none"
     assert result["start"][0] == dt(10)
     assert result["end"][0] == dt(20)
     assert result["original_start"][0] == dt(10)
     assert result["original_end"][0] == dt(20)
 
 
-# --- Status: clamped ---
+# --- Status: clipped ---
 
 
 def test_clamped_start_before_parent():
@@ -71,7 +73,8 @@ def test_clamped_start_before_parent():
         {"start": [dt(3)], "end": [dt(15)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "clamped"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "clipped"
     assert result["start"][0] == dt(5)
     assert result["end"][0] == dt(15)
     assert result["original_start"][0] == dt(3)
@@ -83,7 +86,8 @@ def test_clamped_end_after_parent():
         {"start": [dt(10)], "end": [dt(30)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "clamped"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "clipped"
     assert result["start"][0] == dt(10)
     assert result["end"][0] == dt(25)
     assert result["original_start"][0] == dt(10)
@@ -95,14 +99,15 @@ def test_clamped_both_ends():
         {"start": [dt(3)], "end": [dt(30)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "clamped"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "clipped"
     assert result["start"][0] == dt(5)
     assert result["end"][0] == dt(25)
     assert result["original_start"][0] == dt(3)
     assert result["original_end"][0] == dt(30)
 
 
-# --- Status: no_parent ---
+# --- Status: orphan ---
 
 
 def test_no_parent_key_mismatch():
@@ -111,7 +116,8 @@ def test_no_parent_key_mismatch():
         {"start": [dt(5)], "end": [dt(25)], "key": ["B"]},
     )
     assert len(result) == 1
-    assert result["coerce_status"][0] == "no_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "orphan"
     assert result["original_start"][0] == dt(10)
     assert result["original_end"][0] == dt(20)
 
@@ -122,7 +128,8 @@ def test_no_parent_child_ends_before_all_parents():
         {"start": [dt(5)], "end": [dt(8)], "key": ["A"]},
         {"start": [dt(10)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "no_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "orphan"
 
 
 def test_early_starter_overlaps_first_parent():
@@ -132,12 +139,13 @@ def test_early_starter_overlaps_first_parent():
         {"start": [dt(10)], "end": [dt(25)], "key": ["A"]},
     )
     assert len(result) == 1
-    assert result["coerce_status"][0] == "clamped"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "clipped"
     assert result["start"][0] == dt(10)
     assert result["end"][0] == dt(15)
 
 
-# --- No overlap -> no_parent ---
+# --- No overlap -> orphan ---
 
 
 def test_no_parent_child_after_all_parents():
@@ -145,7 +153,8 @@ def test_no_parent_child_after_all_parents():
         {"start": [dt(26)], "end": [dt(28)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "no_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "orphan"
     assert result["original_start"][0] == dt(26)
     assert result["original_end"][0] == dt(28)
 
@@ -155,10 +164,11 @@ def test_no_parent_child_starts_exactly_at_parent_end():
         {"start": [dt(25)], "end": [dt(30)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "no_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "orphan"
 
 
-# --- Status: null_parent ---
+# --- Status: null_key ---
 
 
 def test_null_parent_null_join_key():
@@ -166,7 +176,8 @@ def test_null_parent_null_join_key():
         {"start": [dt(10)], "end": [dt(20)], "key": [None]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "null_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "null_key"
 
 
 # --- Null end times ---
@@ -177,7 +188,8 @@ def test_null_child_end_clamped_to_parent():
         {"start": [dt(10)], "end": [None], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "clamped"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "clipped"
     assert result["start"][0] == dt(10)
     assert result["end"][0] == dt(25)
     assert result["original_end"][0] is None
@@ -188,7 +200,8 @@ def test_null_parent_end_child_unchanged():
         {"start": [dt(10)], "end": [dt(20)], "key": ["A"]},
         {"start": [dt(5)], "end": [None], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "valid"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "none"
     assert result["start"][0] == dt(10)
     assert result["end"][0] == dt(20)
 
@@ -198,7 +211,8 @@ def test_both_null_end_stays_null():
         {"start": [dt(10)], "end": [None], "key": ["A"]},
         {"start": [dt(5)], "end": [None], "key": ["A"]},
     )
-    assert result["coerce_status"][0] == "valid"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "none"
     assert result["start"][0] == dt(10)
     assert result["end"][0] is None
 
@@ -217,7 +231,8 @@ def test_child_overlaps_one_of_multiple_eras():
         },
     )
     assert len(result) == 1
-    assert result["coerce_status"][0] == "valid"
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "none"
     assert result["start"][0] == dt(15)
     assert result["end"][0] == dt(20)
 
@@ -236,11 +251,11 @@ def test_child_spans_multiple_eras():
     # First row: clamped to era1 [1-10], child is [5-20] -> [5-10]
     row1 = result.filter(pl.col("end") == dt(10))
     assert row1["start"][0] == dt(5)
-    assert row1["coerce_status"][0] == "clamped"
+    assert row1["coerce_action"][0] == "clipped"
     # Second row: clamped to era2 [15-25], child is [5-20] -> [15-20]
     row2 = result.filter(pl.col("start") == dt(15))
     assert row2["end"][0] == dt(20)
-    assert row2["coerce_status"][0] == "clamped"
+    assert row2["coerce_action"][0] == "clipped"
 
 
 def test_early_starter_null_end_spans_multiple_eras():
@@ -257,11 +272,11 @@ def test_early_starter_null_end_spans_multiple_eras():
     # First row: [5-10]
     row1 = result.filter(pl.col("end") == dt(10))
     assert row1["start"][0] == dt(5)
-    assert row1["coerce_status"][0] == "clamped"
+    assert row1["coerce_action"][0] == "clipped"
     # Second row: [15-25]
     row2 = result.filter(pl.col("start") == dt(15))
     assert row2["end"][0] == dt(25)
-    assert row2["coerce_status"][0] == "clamped"
+    assert row2["coerce_action"][0] == "clipped"
 
 
 def test_child_in_gap_between_eras():
@@ -275,7 +290,8 @@ def test_child_in_gap_between_eras():
         },
     )
     assert len(result) == 1
-    assert result["coerce_status"][0] == "no_parent"
+    assert result["valid"][0] is False
+    assert result["coerce_action"][0] == "orphan"
 
 
 # --- Column preservation ---
@@ -328,6 +344,7 @@ def test_audit_columns_present():
         {"start": [dt(10)], "end": [dt(20)], "key": ["A"]},
         {"start": [dt(5)], "end": [dt(25)], "key": ["A"]},
     )
-    assert "coerce_status" in result.columns
+    assert "valid" in result.columns
+    assert "coerce_action" in result.columns
     assert "original_start" in result.columns
     assert "original_end" in result.columns
