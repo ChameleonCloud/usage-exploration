@@ -16,49 +16,60 @@ adapters → intervals [entity_id, start, end, quantity_type, source]
 import polars as pl
 
 
-def intervals_to_deltas(
-    df: pl.LazyFrame,
-    start_col: str,
-    end_col: str,
-    group_cols: list[str],
-) -> pl.LazyFrame:
-    """[start, end) intervals → +1 at start, -1 at end."""
-    starts = df.select(
-        pl.col(start_col).alias("timestamp"),
-        *[pl.col(c) for c in group_cols],
-        pl.lit(1).alias("change"),
-    )
-    ends = df.filter(pl.col(end_col).is_not_null()).select(
-        pl.col(end_col).alias("timestamp"),
-        *[pl.col(c) for c in group_cols],
-        pl.lit(-1).alias("change"),
-    )
-    return pl.concat([starts, ends])
+class Sweepline:
+    # internal columns for transform
+    DELTA_COL = "change"
+    TIME_COL = "timestamp"
 
+    @classmethod
+    def intervals_to_deltas(
+        cls,
+        df: pl.LazyFrame,
+        start_col: str,
+        end_col: str,
+        group_cols: list[str],
+    ) -> pl.LazyFrame:
+        """[start, end) intervals → +1 at start, -1 at end."""
+        starts = df.select(
+            pl.col(start_col).alias(cls.TIME_COL),
+            *[pl.col(c) for c in group_cols],
+            pl.lit(1).alias(cls.DELTA_COL),
+        )
+        ends = df.filter(pl.col(end_col).is_not_null()).select(
+            pl.col(end_col).alias(cls.TIME_COL),
+            *[pl.col(c) for c in group_cols],
+            pl.lit(-1).alias(cls.DELTA_COL),
+        )
+        return pl.concat([starts, ends])
 
-def deltas_to_counts(
-    df: pl.LazyFrame,
-    group_cols: list[str],
-) -> pl.LazyFrame:
-    """Aggregate deltas by timestamp, cumsum per group."""
-    return (
-        df.group_by(["timestamp", *group_cols])
-        .agg(pl.col("change").sum())
-        .sort(group_cols + ["timestamp"])
-        .with_columns(pl.col("change").cum_sum().over(group_cols).alias("count"))
-        .drop("change")
-    )
+    @classmethod
+    def deltas_to_counts(
+        cls,
+        df: pl.LazyFrame,
+        group_cols: list[str],
+    ) -> pl.LazyFrame:
+        """Aggregate deltas by timestamp, cumsum per group."""
+        return (
+            df.group_by([cls.TIME_COL, *group_cols])
+            .agg(pl.col(cls.DELTA_COL).sum())
+            .sort(group_cols + [cls.TIME_COL])
+            .with_columns(
+                pl.col(cls.DELTA_COL).cum_sum().over(group_cols).alias("count")
+            )
+            .drop(cls.DELTA_COL)
+        )
 
-
-def intervals_to_counts(
-    df: pl.LazyFrame,
-    start_col: str,
-    end_col: str,
-    group_cols: list[str],
-) -> pl.LazyFrame:
-    deltas = intervals_to_deltas(df, start_col, end_col, group_cols)
-    counts = deltas_to_counts(deltas, group_cols)
-    return counts
+    @classmethod
+    def intervals_to_counts(
+        cls,
+        df: pl.LazyFrame,
+        start_col: str,
+        end_col: str,
+        group_cols: list[str],
+    ) -> pl.LazyFrame:
+        deltas = cls.intervals_to_deltas(df, start_col, end_col, group_cols)
+        counts = cls.deltas_to_counts(deltas, group_cols)
+        return counts
 
 
 def resample(
