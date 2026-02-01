@@ -16,7 +16,7 @@ from chameleon_usage.pipeline import (
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.plots import make_plots
 
-TIME_RANGE = (datetime(2010, 1, 1), datetime(2025, 11, 1))
+TIME_RANGE = (datetime(2024, 1, 1), datetime(2025, 11, 1))
 BUCKET_LENGTH = "1d"
 
 

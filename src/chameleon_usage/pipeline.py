@@ -55,10 +55,10 @@ def intervals_to_counts(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
 
 
 def clip_to_window(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
-    """Filter to timestamps within spec.time_range."""
+    """Drop events after window end. Keep pre-window events for join_asof."""
     spec.validate_stage(df, "count")
-    start, end = spec.time_range
-    return df.filter((pl.col("timestamp") >= start) & (pl.col("timestamp") <= end))
+    _, end = spec.time_range
+    return df.filter(pl.col("timestamp") <= end)
 
 
 def align_timestamps(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:

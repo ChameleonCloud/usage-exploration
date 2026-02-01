@@ -31,73 +31,63 @@ def resample_step_function(
     group_cols: list[str],
     time_range: tuple[datetime, datetime],
 ) -> pl.LazyFrame:
-    """Resample step-function data with duration weighting.
+    """Resample step-function data to regular intervals using point-in-time sampling.
 
-    Events span bucket boundaries: an event persists until the next event,
-    contributing proportionally to each bucket it overlaps.
+    For each bucket timestamp, finds the most recent event value via join_asof.
+    This gives the instantaneous value at each bucket boundary.
+
+    For daily usage charts this is correct: "what was the count at midnight each day?"
     """
     start, end = time_range
 
-    # 1. Add "valid until" timestamp for each event
-    events = df.sort([*group_cols, timestamp_col]).with_columns(
-        pl.col(timestamp_col)
-        .shift(-1)
-        .over(group_cols)
-        .fill_null(end)
-        .alias("_valid_until")
-    )
-
-    # 2. Create bucket scaffold
-    bucket_starts = (
+    # Create bucket timestamps
+    buckets = (
         pl.datetime_range(start, end, interval, eager=True)
-        .alias("_bucket_start")
+        .alias(timestamp_col)
         .to_frame()
         .lazy()
-        .filter(pl.col("_bucket_start") < end)
+        .filter(pl.col(timestamp_col) < end)
     )
-    bucket_starts = bucket_starts.with_columns(
-        pl.col("_bucket_start")
-        .dt.offset_by(interval)
-        .clip(upper_bound=end)
-        .alias("_bucket_end")
-    )
+
+    # Cross with groups to get scaffold
     groups = df.select(group_cols).unique()
-    scaffold = groups.join(bucket_starts, how="cross")
+    scaffold = groups.join(buckets, how="cross")
 
-    # 3. Join events to buckets where event overlaps bucket
-    # Event [ts, valid_until) overlaps bucket [bucket_start, bucket_end) if:
-    #   ts < bucket_end AND valid_until > bucket_start
-    joined = scaffold.join(events, on=group_cols, how="left").filter(
-        (pl.col(timestamp_col) < pl.col("_bucket_end"))
-        & (pl.col("_valid_until") > pl.col("_bucket_start"))
-    )
-
-    # 4. Clip duration to bucket boundaries
-    joined = joined.with_columns(
-        (
-            pl.min_horizontal(pl.col("_valid_until"), pl.col("_bucket_end"))
-            - pl.max_horizontal(pl.col(timestamp_col), pl.col("_bucket_start"))
+    # For each bucket, find the most recent event value
+    sorted_events = df.sort([*group_cols, timestamp_col])
+    return (
+        scaffold.join_asof(
+            sorted_events,
+            on=timestamp_col,
+            by=group_cols,
+            strategy="backward",
         )
-        .dt.total_microseconds()
-        .alias("_duration_us")
+        .with_columns(pl.col(value_col).fill_null(0))
+        .sort([*group_cols, timestamp_col])
     )
 
-    # 5. Weighted average per bucket
-    aggregated = (
-        joined.group_by([*group_cols, "_bucket_start"])
-        .agg(
-            (pl.col(value_col) * pl.col("_duration_us")).sum().alias("_weighted"),
-            pl.col("_duration_us").sum().alias("_total"),
-        )
-        .with_columns((pl.col("_weighted") / pl.col("_total")).alias(value_col))
-        .drop(["_weighted", "_total"])
-        .rename({"_bucket_start": timestamp_col})
-    )
 
-    # 6. Rejoin to scaffold to get nulls for buckets with no events
-    scaffold_clean = scaffold.select([*group_cols, "_bucket_start"]).rename(
-        {"_bucket_start": timestamp_col}
-    )
-    return scaffold_clean.join(
-        aggregated, on=[*group_cols, timestamp_col], how="left"
-    ).sort([*group_cols, timestamp_col])
+# TODO: Duration-weighted resampling for resource-hours calculation
+#
+# The current resample_step_function uses point-in-time sampling (join_asof),
+# which answers: "what was the value at this moment?"
+#
+# For resource-hours (e.g., "total CPU-hours used this month"), we need
+# duration-weighted averaging: each event's value contributes proportionally
+# to the time it was active within the bucket.
+#
+# Example: bucket is [00:00, 24:00), event A (value=10) from 00:00-12:00,
+# event B (value=20) from 12:00-24:00. Point-in-time at 00:00 gives 10.
+# Duration-weighted gives (10*12h + 20*12h) / 24h = 15.
+#
+# Implementation approach:
+# 1. Add _valid_until = shift(-1).over(group_cols).fill_null(end)
+# 2. For each event, find which buckets it overlaps
+# 3. Clip event duration to bucket boundaries
+# 4. Compute weighted sum: sum(value * duration) / sum(duration)
+#
+# The naive cross-join approach (N_events × N_buckets) is O(n²) and slow.
+# Better approaches:
+# - Segment tree / interval tree for overlap queries
+# - Sort-merge join on bucket boundaries
+# - Cumulative sum trick: convert to cumsum, sample at bucket edges, diff
