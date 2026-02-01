@@ -82,18 +82,32 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
     """Load instances with blazar reservation_id from request_specs."""
     instances = tables[Tables.NOVA_INSTANCES]
 
-    # Extract blazar reservation_id from request_specs JSON
-    # The key is literally "nova_object.data" (dot in key name), not nested
-    request_specs = tables[Tables.NOVA_REQUEST_SPECS].select(
-        pl.col("instance_uuid"),
+    # Extract reservation_id: scheduler_hints first, then flavor name
+    res_hint = (
         pl.col("spec")
         .str.json_path_match("$['nova_object.data'].scheduler_hints.reservation[0]")
-        .alias("blazar_reservation_id"),
+        .alias("res_hint")
+    )
+    res_flavor = (
+        pl.col("spec")
+        .str.json_path_match("$['nova_object.data'].flavor['nova_object.data'].name")
+        .str.extract(r"^reservation:(.+)$", 1)
+        .alias("res_flavor")
+    )
+    request_specs = tables[Tables.NOVA_REQUEST_SPECS].select(
+        "instance_uuid", res_hint, res_flavor
     )
 
-    return instances.join(
-        request_specs,
-        left_on="uuid",
-        right_on="instance_uuid",
-        how="left",
+    return (
+        instances.join(
+            request_specs, left_on="uuid", right_on="instance_uuid", how="left"
+        )
+        .with_columns(
+            pl.coalesce("res_hint", "res_flavor").alias("blazar_reservation_id"),
+            pl.when(pl.col("res_hint").is_null() & pl.col("res_flavor").is_null())
+            .then(pl.lit("ondemand"))
+            .otherwise(pl.lit("reservation"))
+            .alias("booking_type"),
+        )
+        .drop("res_hint", "res_flavor")
     )
