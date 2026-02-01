@@ -35,16 +35,28 @@ def apply_temporal_clamp(
     children: pl.LazyFrame,
     parents: pl.LazyFrame,
     join_keys: list[str],
+    require_parent: pl.Expr | None = None,
 ) -> pl.LazyFrame:
     children = children.with_columns(
         pl.col("start").alias("original_start"),
         pl.col("end").alias("original_end"),
     ).with_row_index("_row_id")
 
+    # If require_parent specified, rows not requiring parent are valid as-is
+    if require_parent is not None:
+        needs_parent = children.filter(require_parent)
+        no_parent_needed = children.filter(~require_parent).with_columns(
+            pl.lit(True).alias("valid"),
+            pl.lit("none").alias("coerce_action"),
+        )
+    else:
+        needs_parent = children
+        no_parent_needed = children.clear()
+
     # Null keys can't match - handle separately
     has_null_key = pl.any_horizontal(*[pl.col(k).is_null() for k in join_keys])
-    null_key_rows = children.filter(has_null_key)
-    matchable = children.filter(~has_null_key)
+    null_key_rows = needs_parent.filter(has_null_key)
+    matchable = needs_parent.filter(~has_null_key)
 
     # Cast to match parent dtypes (avoids schema mismatch on empty frames)
     matchable = matchable.cast({k: parents.collect_schema()[k] for k in join_keys})
@@ -98,7 +110,7 @@ def apply_temporal_clamp(
     )
 
     return (
-        pl.concat([result, orphan_rows, null_result], how="diagonal")
+        pl.concat([result, orphan_rows, null_result, no_parent_needed], how="diagonal")
         .sort("_row_id")
         .drop("_row_id")
     )
@@ -127,10 +139,13 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     clamped_committed = apply_temporal_clamp(
         committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
     )
+    # Only reserved instances (booking_type="reservation") need allocation parents
+    # On-demand instances are valid without clamping
     clamped_occupied = apply_temporal_clamp(
         occupied,
         parents=clamped_committed,
         join_keys=["blazar_reservation_id", "hypervisor_hostname"],
+        require_parent=pl.col("booking_type").eq("reservation"),
     )
 
     total_with_status = total.with_columns(

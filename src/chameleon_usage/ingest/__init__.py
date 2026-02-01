@@ -58,6 +58,7 @@ novaInstanceOccupied = Adapter(
     context_cols={
         "uuid": "instance_id",
         "blazar_reservation_id": "blazar_reservation_id",
+        "booking_type": "booking_type",
         "node": "hypervisor_hostname",
     },
 )
