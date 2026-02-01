@@ -139,11 +139,16 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     clamped_committed = apply_temporal_clamp(
         committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
     )
+    # Deduplicate allocations per (hostname, reservation_id) for instance matching
+    # flavor:instance reservations create many allocations per host with same time window
+    committed_for_occupied = clamped_committed.unique(
+        subset=["hypervisor_hostname", "blazar_reservation_id"], keep="first"
+    )
     # Only reserved instances (booking_type="reservation") need allocation parents
     # On-demand instances are valid without clamping
     clamped_occupied = apply_temporal_clamp(
         occupied,
-        parents=clamped_committed,
+        parents=committed_for_occupied,
         join_keys=["blazar_reservation_id", "hypervisor_hostname"],
         require_parent=pl.col("booking_type").eq("reservation"),
     )
