@@ -1,8 +1,37 @@
 """Pipeline schemas for stage boundary validation."""
 
+from dataclasses import dataclass
+
 import pandera.polars as pa
 import polars as pl
 from pandera.typing.polars import LazyFrame
+
+
+@dataclass
+class PipelineSpec:
+    """Defines column requirements at each stage."""
+
+    group_cols: tuple[str, ...]  # immutable, set once
+
+    @property
+    def interval_required(self) -> set[str]:
+        return {"entity_id", "start", "end", *self.group_cols}
+
+    @property
+    def delta_required(self) -> set[str]:
+        return {"timestamp", "change", *self.group_cols}
+
+    @property
+    def count_required(self) -> set[str]:
+        return {"timestamp", "count", *self.group_cols}
+
+    def validate_stage(self, df: pl.LazyFrame, stage: str) -> pl.LazyFrame:
+        required = getattr(self, f"{stage}_required")
+        actual = set(df.collect_schema().names())
+        missing = required - actual
+        if missing:
+            raise ValueError(f"Stage {stage} missing columns: {missing}")
+        return df
 
 
 class IntervalSchema(pa.DataFrameModel):

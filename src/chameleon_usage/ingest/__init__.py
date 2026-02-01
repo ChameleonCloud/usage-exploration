@@ -91,7 +91,18 @@ def load_intervals(base_path: str, site_name: str) -> pl.LazyFrame:
         join_keys=["blazar_reservation_id", "hypervisor_hostname"],
     )
 
+    total_with_status = total.with_columns(
+        pl.col("start").alias("original_start"),
+        pl.col("end").alias("original_end"),
+        pl.lit("valid").alias("coerce_status"),
+    )
+
     return pl.concat(
-        [total, clamped_reservable, clamped_committed, clamped_occupied],
+        [
+            total_with_status,
+            clamped_reservable,
+            clamped_committed,
+            clamped_occupied,
+        ],
         how="diagonal",
     )
