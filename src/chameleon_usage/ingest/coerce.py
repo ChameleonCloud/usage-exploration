@@ -18,16 +18,15 @@ Clamping: For each overlap, clamp to the intersection:
 Output columns added:
     original_start  - child's start before clamping
     original_end    - child's end before clamping
-    coerce_status   - what happened:
-        "valid"       : child fully inside parent, no change needed
-        "clamped"     : child was clipped to fit parent
-        "no_parent"   : no overlapping parent found for this join key
-        "null_parent" : join key was null, cannot match
+    valid           - bool: True = use in analysis, False = exclude
+    coerce_action   - what happened:
+        "none"        : child fully inside parent, no change needed
+        "clipped"     : child was clipped to fit parent
+        "orphan"      : no valid parent found (no match or no overlap)
+        "null_key"    : join key was null, cannot match
 
-All rows preserved. Downstream decides what to do with each status.
+All rows preserved. Downstream filters on `valid`.
 """
-
-from typing import List
 
 import polars as pl
 
@@ -35,7 +34,7 @@ import polars as pl
 def apply_temporal_clamp(
     children: pl.LazyFrame,
     parents: pl.LazyFrame,
-    join_keys: List[str],
+    join_keys: list[str],
 ) -> pl.LazyFrame:
     children = children.with_columns(
         pl.col("start").alias("original_start"),
@@ -67,15 +66,15 @@ def apply_temporal_clamp(
     )
     overlaps = child_starts_before_parent_ends & child_ends_after_parent_starts
 
-    # Split: rows that overlap vs rows with no overlapping parent
+    # Split: matched (has parent + overlaps) vs orphan
     has_parent = pl.col("_p_start").is_not_null()
     matched = joined.filter(has_parent & overlaps)
 
-    # Children with no overlapping parent: exclude any child that has at least one match
+    # Children with no overlapping parent = orphan
     matched_row_ids = matched.select("_row_id").unique()
-    no_parent_rows = (
-        matchable.join(matched_row_ids, on="_row_id", how="anti")
-        .with_columns(pl.lit("no_parent").alias("coerce_status"))
+    orphan_rows = matchable.join(matched_row_ids, on="_row_id", how="anti").with_columns(
+        pl.lit(False).alias("valid"),
+        pl.lit("orphan").alias("coerce_action"),
     )
 
     # Determine status and clamp matched rows
@@ -83,21 +82,65 @@ def apply_temporal_clamp(
     end_outside = pl.col("_p_end").is_not_null() & (
         pl.col("original_end").is_null() | (pl.col("original_end") > pl.col("_p_end"))
     )
+    was_clipped = start_outside | end_outside
+
     result = matched.with_columns(
-        pl.when(start_outside | end_outside)
-        .then(pl.lit("clamped"))
-        .otherwise(pl.lit("valid"))
-        .alias("coerce_status"),
+        pl.lit(True).alias("valid"),
+        pl.when(was_clipped).then(pl.lit("clipped")).otherwise(pl.lit("none")).alias("coerce_action"),
         pl.max_horizontal("original_start", "_p_start").alias("start"),
         pl.min_horizontal("original_end", "_p_end").alias("end"),
     ).drop("_p_start", "_p_end")
 
-    # Reassemble: matched + unmatched + null-key rows
+    # Null key rows - separate category
     null_result = null_key_rows.with_columns(
-        pl.lit("null_parent").alias("coerce_status")
+        pl.lit(False).alias("valid"),
+        pl.lit("null_key").alias("coerce_action"),
     )
+
     return (
-        pl.concat([result, no_parent_rows, null_result], how="diagonal")
+        pl.concat([result, orphan_rows, null_result], how="diagonal")
         .sort("_row_id")
         .drop("_row_id")
+    )
+
+
+def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply hierarchical temporal clamping: total → reservable → committed → occupied.
+
+    Each layer is clamped to its parent's time window. Rows outside their parent's
+    window are tagged with valid=False but preserved for debugging.
+
+    Args:
+        intervals: Raw intervals with quantity_type column
+
+    Returns:
+        Intervals with valid, coerce_action, original_start, original_end added.
+    """
+    total = intervals.filter(pl.col("quantity_type").eq("total"))
+    reservable = intervals.filter(pl.col("quantity_type").eq("reservable"))
+    committed = intervals.filter(pl.col("quantity_type").eq("committed"))
+    occupied = intervals.filter(pl.col("quantity_type").eq("occupied"))
+
+    clamped_reservable = apply_temporal_clamp(
+        reservable, parents=total, join_keys=["hypervisor_hostname"]
+    )
+    clamped_committed = apply_temporal_clamp(
+        committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
+    )
+    clamped_occupied = apply_temporal_clamp(
+        occupied,
+        parents=clamped_committed,
+        join_keys=["blazar_reservation_id", "hypervisor_hostname"],
+    )
+
+    total_with_status = total.with_columns(
+        pl.col("start").alias("original_start"),
+        pl.col("end").alias("original_end"),
+        pl.lit(True).alias("valid"),
+        pl.lit("none").alias("coerce_action"),
+    )
+
+    return pl.concat(
+        [total_with_status, clamped_reservable, clamped_committed, clamped_occupied],
+        how="diagonal",
     )

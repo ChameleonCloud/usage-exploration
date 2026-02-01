@@ -1,5 +1,7 @@
 """Ingest module: load raw data and convert to intervals."""
 
+from datetime import datetime
+
 import polars as pl
 
 from chameleon_usage.constants import Tables
@@ -9,7 +11,7 @@ from chameleon_usage.ingest.adapters import (
     blazar_allocations_source,
     nova_instances_source,
 )
-from chameleon_usage.ingest.coerce import apply_temporal_clamp
+from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.ingest.loader import load_raw_tables
 
 ##################
@@ -70,39 +72,27 @@ REGISTRY = AdapterRegistry(
 )
 
 
-def load_intervals(base_path: str, site_name: str) -> pl.LazyFrame:
+def load_intervals(
+    base_path: str,
+    site_name: str,
+    time_range: tuple[datetime, datetime] | None = None,
+) -> pl.LazyFrame:
+    """Load raw intervals from parquet, optionally filtered to time range.
+
+    Args:
+        base_path: Path to parquet files
+        site_name: Site directory name
+        time_range: Optional (start, end) to filter intervals that overlap this window
+    """
     tables = load_raw_tables(base_path, site_name)
     intervals = REGISTRY.to_intervals(tables)
 
-    total = intervals.filter(pl.col("quantity_type").eq("total"))
-    reservable = intervals.filter(pl.col("quantity_type").eq("reservable"))
-    committed = intervals.filter(pl.col("quantity_type").eq("committed"))
-    occupied = intervals.filter(pl.col("quantity_type").eq("occupied"))
+    if time_range is not None:
+        range_start, range_end = time_range
+        # Inclusive: interval touches or overlaps window
+        overlaps = (pl.col("start") <= range_end) & (
+            pl.col("end").is_null() | (pl.col("end") >= range_start)
+        )
+        intervals = intervals.filter(overlaps)
 
-    clamped_reservable = apply_temporal_clamp(
-        reservable, parents=total, join_keys=["hypervisor_hostname"]
-    )
-    clamped_committed = apply_temporal_clamp(
-        committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
-    )
-    clamped_occupied = apply_temporal_clamp(
-        occupied,
-        parents=clamped_committed,
-        join_keys=["blazar_reservation_id", "hypervisor_hostname"],
-    )
-
-    total_with_status = total.with_columns(
-        pl.col("start").alias("original_start"),
-        pl.col("end").alias("original_end"),
-        pl.lit("valid").alias("coerce_status"),
-    )
-
-    return pl.concat(
-        [
-            total_with_status,
-            clamped_reservable,
-            clamped_committed,
-            clamped_occupied,
-        ],
-        how="diagonal",
-    )
+    return intervals

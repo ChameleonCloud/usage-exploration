@@ -15,10 +15,6 @@ from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.math import sweepline, timeseries
 from chameleon_usage.schemas import PipelineSpec
 
-# =============================================================================
-# FULL PIPELINE - the "can't hold it wrong" version
-# =============================================================================
-
 
 def run_pipeline(
     intervals: pl.LazyFrame,
