@@ -35,11 +35,17 @@ class QuantityTypes:
     IDLE = "idle"
 
 
+class SchemaCols:
+    """Canonical pipeline schema column names."""
+
+    METRIC = "metric"
+    RESOURCE = "resource"
+    VALUE = "value"
+    TIMESTAMP = "timestamp"
+
+
 class Cols:
-    """
-    Use these instead of magic strings.
-    Particularly helpful anywhere pl.alias() is called.
-    """
+    """Raw DB column names."""
 
     ID = "id"
     CREATED_AT = "created_at"
@@ -53,5 +59,3 @@ class Cols:
     VALUE = "value"
     PREV_VALUE = "prev_value"
     DELTA = "delta"
-    QUANTITY_TYPE = "quantity_type"
-    COUNT = "count"

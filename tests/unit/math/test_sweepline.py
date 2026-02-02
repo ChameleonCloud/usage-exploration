@@ -82,8 +82,8 @@ def test_counts_cumsums_per_group():
     )
     counts = deltas_to_counts(df, ["group"]).collect().sort(["group", "timestamp"])
 
-    assert counts.filter(pl.col("group") == "a")["count"].to_list() == [1, 0]
-    assert counts.filter(pl.col("group") == "b")["count"].to_list() == [1]
+    assert counts.filter(pl.col("group") == "a")["value"].to_list() == [1, 0]
+    assert counts.filter(pl.col("group") == "b")["value"].to_list() == [1]
 
 
 def test_counts_aggregates_same_timestamp():
@@ -96,7 +96,7 @@ def test_counts_aggregates_same_timestamp():
     )
     counts = deltas_to_counts(df, ["group"]).collect()
 
-    assert counts["count"][0] == 2
+    assert counts["value"][0] == 2
 
 
 # MISSING: empty group_cols, multiple group columns
@@ -119,7 +119,7 @@ def test_single_interval_counts_one_then_zero():
     )
     counts = intervals_to_counts(df, "start", "end", ["group"]).collect()
 
-    assert counts["count"].to_list() == [1, 0]
+    assert counts["value"].to_list() == [1, 0]
 
 
 def test_overlapping_intervals_stack():
@@ -133,7 +133,7 @@ def test_overlapping_intervals_stack():
     )
     counts = intervals_to_counts(df, "start", "end", ["group"]).collect()
 
-    assert counts["count"].to_list() == [1, 2, 1, 0]
+    assert counts["value"].to_list() == [1, 2, 1, 0]
 
 
 def test_open_interval_stays_active():
@@ -147,7 +147,7 @@ def test_open_interval_stays_active():
     )
     counts = intervals_to_counts(df, "start", "end", ["group"]).collect()
 
-    assert counts["count"].to_list() == [1]
+    assert counts["value"].to_list() == [1]
 
 
 def test_groups_are_independent():
@@ -165,8 +165,8 @@ def test_groups_are_independent():
         .sort(["group", "timestamp"])
     )
 
-    assert counts.filter(pl.col("group") == "a")["count"].to_list() == [1, 0]
-    assert counts.filter(pl.col("group") == "b")["count"].to_list() == [1, 0]
+    assert counts.filter(pl.col("group") == "a")["value"].to_list() == [1, 0]
+    assert counts.filter(pl.col("group") == "b")["value"].to_list() == [1, 0]
 
 
 # MISSING: adjacent intervals [t1,t2)+[t2,t3) seamless count=1

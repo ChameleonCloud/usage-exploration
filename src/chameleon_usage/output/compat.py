@@ -23,15 +23,15 @@ class CanonicalStates:
 def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
     """Pipeline output (UsageSchema) → backwards-compatible wide format.
 
-    Input: long format with quantity_type in [total, reservable, available, idle, occupied]
+    Input: long format with metric in [total, reservable, available, idle, occupied]
     Output: wide format with canonical states as columns, node_type = "unknown"
     """
     wide = (
-        df.filter(pl.col("quantity_type").is_in([QT.TOTAL, QT.RESERVABLE, QT.AVAILABLE, QT.IDLE, QT.OCCUPIED]))
-        .group_by(["timestamp", "site", "quantity_type"])
-        .agg(pl.col("count").sum())
+        df.filter(pl.col("metric").is_in([QT.TOTAL, QT.RESERVABLE, QT.AVAILABLE, QT.IDLE, QT.OCCUPIED]))
+        .group_by(["timestamp", "site", "metric"])
+        .agg(pl.col("value").sum())
         .collect()
-        .pivot(on="quantity_type", index=["timestamp", "site"], values="count")
+        .pivot(on="metric", index=["timestamp", "site"], values="value")
     )
 
     return wide.select(

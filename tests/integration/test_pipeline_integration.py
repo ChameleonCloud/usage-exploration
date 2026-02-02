@@ -11,7 +11,7 @@ from chameleon_usage.schemas import PipelineSpec
 
 def test_run_pipeline_produces_derived_metrics():
     spec = PipelineSpec(
-        group_cols=("quantity_type",),
+        group_cols=("metric", "resource"),
         time_range=(datetime(2024, 1, 1), datetime(2024, 1, 5)),
     )
     df = pl.LazyFrame(
@@ -19,9 +19,11 @@ def test_run_pipeline_produces_derived_metrics():
             "entity_id": ["a", "b"],
             "start": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
             "end": [datetime(2024, 1, 3), datetime(2024, 1, 3)],
-            "quantity_type": [QT.RESERVABLE, QT.COMMITTED],
+            "metric": [QT.RESERVABLE, QT.COMMITTED],
+            "resource": ["vcpu", "vcpu"],
+            "value": [1.0, 1.0],
         }
     )
     result = run_pipeline(df, spec).collect()
 
-    assert QT.AVAILABLE in result["quantity_type"].to_list()
+    assert QT.AVAILABLE in result["metric"].to_list()

@@ -10,7 +10,7 @@ These methods must *never* call collect()
 adapters → intervals [entity_id, start, end, quantity_type, source]
   → core.intervals_to_deltas
   → core.deltas_to_counts
-  → usage [timestamp, quantity_type, count]
+  → usage [timestamp, quantity_type, value]
 """
 
 import polars as pl
@@ -18,6 +18,7 @@ import polars as pl
 # Module-private constants
 _DELTA_COL = "change"
 _TIME_COL = "timestamp"
+# TODO value_col
 
 
 def intervals_to_deltas(
@@ -49,7 +50,7 @@ def deltas_to_counts(
         df.group_by([_TIME_COL, *group_cols])
         .agg(pl.col(_DELTA_COL).sum())
         .sort(group_cols + [_TIME_COL])
-        .with_columns(pl.col(_DELTA_COL).cum_sum().over(group_cols).alias("count"))
+        .with_columns(pl.col(_DELTA_COL).cum_sum().over(group_cols).alias("value"))
         .drop(_DELTA_COL)
     )
 

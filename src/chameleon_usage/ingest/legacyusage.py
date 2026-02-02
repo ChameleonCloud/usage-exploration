@@ -20,8 +20,8 @@ from pathlib import Path
 import polars as pl
 from pandera.typing.polars import LazyFrame as LazyGeneric
 
-from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.ingest import rawschemas as raw
 from chameleon_usage.schemas import UsageModel
 
@@ -65,7 +65,7 @@ def _to_current_hours(aggregated: pl.LazyFrame) -> pl.LazyFrame:
 
 def _hours_to_counts(hours: pl.LazyFrame) -> pl.LazyFrame:
     return hours.select(
-        pl.col("date").alias(C.TIMESTAMP),
+        pl.col("date").alias(S.TIMESTAMP),
         (pl.col("total_hours") / HOURS_PER_DAY).alias(QT.TOTAL),
         (pl.col("reservable_hours") / HOURS_PER_DAY).alias(QT.RESERVABLE),
         (pl.col("committed_hours") / HOURS_PER_DAY).alias(QT.COMMITTED),
@@ -78,13 +78,13 @@ def _hours_to_counts(hours: pl.LazyFrame) -> pl.LazyFrame:
 def _to_long_format(wide: pl.LazyFrame) -> pl.LazyFrame:
     return (
         wide.unpivot(
-            index=C.TIMESTAMP,
-            variable_name=C.QUANTITY_TYPE,
-            value_name=C.COUNT,
+            index=S.TIMESTAMP,
+            variable_name=S.METRIC,
+            value_name=S.VALUE,
         )
-        .group_by([C.TIMESTAMP, C.QUANTITY_TYPE])
-        .agg(pl.col(C.COUNT).sum())
-        .sort([C.TIMESTAMP, C.QUANTITY_TYPE])
+        .group_by([S.TIMESTAMP, S.METRIC])
+        .agg(pl.col(S.VALUE).sum())
+        .sort([S.TIMESTAMP, S.METRIC])
     )
 
 

@@ -39,30 +39,41 @@ class IntervalModel(pa.DataFrameModel):
 
     @classmethod
     def group_cols(cls) -> tuple[str, ...]:
-        """Helper to allow chacking group_by columns"""
+        """Helper to allow checking group_by columns."""
         all_cols = set(cls.to_schema().columns.keys())
-        return tuple(all_cols - set(cls._value_cols))
+        return tuple(sorted(all_cols - set(cls._value_cols)))
+
+    @classmethod
+    def validate(cls, check_obj, *args, **kwargs):
+        """Reorder columns to match schema, then validate."""
+        check_obj = check_obj.select(*cls.to_schema().columns.keys())
+        return super().validate(check_obj, *args, **kwargs)
 
 
 class TimelineModel(pa.DataFrameModel):
     """Output of intervals_to_counts, input to resample."""
 
     timestamp: pl.Datetime
+    value: float = pa.Field(coerce=True)
     metric: str
     resource: str
-    value: float = pa.Field(coerce=True)
+
+    _value_cols: ClassVar[tuple[str, ...]] = ("timestamp", "value")
 
     class Config(BaseConfig):
-        strict = True  # make sure all specified columns are in the validated dataframe
-        ordered = True  #: validate columns order
-        # Columns that are "values" not dimensions
-        value_cols = ("timestamp", "value")
+        strict = True
+        ordered = True
 
     @classmethod
     def group_cols(cls) -> tuple[str, ...]:
-        """Helper to allow chacking group_by columns"""
         all_cols = set(cls.to_schema().columns.keys())
-        return tuple(all_cols - set(cls.Config.value_cols))
+        return tuple(sorted(all_cols - set(cls._value_cols)))
+
+    @classmethod
+    def validate(cls, check_obj, *args, **kwargs):
+        """Reorder columns to match schema, then validate."""
+        check_obj = check_obj.select(*cls.to_schema().columns.keys())
+        return super().validate(check_obj, *args, **kwargs)
 
 
 class UsageModel(TimelineModel):

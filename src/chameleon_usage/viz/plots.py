@@ -1,10 +1,8 @@
-from datetime import datetime
-
 import altair as alt
 import polars as pl
 
-from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import SchemaCols as S
 
 # Chart dimensions
 WIDTH = 516
@@ -33,41 +31,39 @@ QTY_COLOR_SCALE = alt.Scale(domain=QTY_ORDER, range=[QTY_COLORS[t] for t in QTY_
 
 def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
     base = alt.Chart(data)
-    x_time = alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year"))
+    x_time = alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year"))
 
     area_types = [QT.OCCUPIED, QT.IDLE, QT.COMMITTED, QT.AVAILABLE]
 
     areas = (
-        base.transform_filter(
-            alt.FieldOneOfPredicate(field="quantity_type", oneOf=area_types)
-        )
-        .transform_calculate(stack_order=f"indexof({area_types}, datum.quantity_type)")
+        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=area_types))
+        .transform_calculate(stack_order=f"indexof({area_types}, datum.{S.METRIC})")
         .mark_area(interpolate="step-after")
         .encode(
             x=x_time,
-            y=alt.Y(f"{C.COUNT}:Q", stack=True),
-            color=alt.Color(f"{C.QUANTITY_TYPE}:N", scale=QTY_COLOR_SCALE),
+            y=alt.Y(f"{S.VALUE}:Q", stack=True),
+            color=alt.Color(f"{S.METRIC}:N", scale=QTY_COLOR_SCALE),
             order=alt.Order("stack_order:Q"),
         )
     )
 
     line_total = (
-        base.transform_filter(alt.datum.quantity_type == "total")
+        base.transform_filter(alt.datum.metric == "total")
         .mark_line(strokeWidth=2, interpolate="step-after")
         .encode(
             x=x_time,
-            y=alt.Y(f"{C.COUNT}:Q"),
-            color=alt.Color(f"{C.QUANTITY_TYPE}:N", scale=QTY_COLOR_SCALE),
+            y=alt.Y(f"{S.VALUE}:Q"),
+            color=alt.Color(f"{S.METRIC}:N", scale=QTY_COLOR_SCALE),
         )
     )
 
     line_reservable = (
-        base.transform_filter(alt.datum.quantity_type == "reservable")
+        base.transform_filter(alt.datum.metric == "reservable")
         .mark_line(strokeWidth=2, strokeDash=[4, 4], interpolate="step-after")
         .encode(
             x=x_time,
-            y=alt.Y(f"{C.COUNT}:Q"),
-            color=alt.Color(f"{C.QUANTITY_TYPE}:N", scale=QTY_COLOR_SCALE),
+            y=alt.Y(f"{S.VALUE}:Q"),
+            color=alt.Color(f"{S.METRIC}:N", scale=QTY_COLOR_SCALE),
         )
     )
 
@@ -79,9 +75,9 @@ def usage_line_plot(data: pl.DataFrame) -> alt.FacetChart:
         alt.Chart(data)
         .mark_line(strokeWidth=1, interpolate="step-after")
         .encode(
-            x=alt.X(f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
-            y=alt.Y(f"{C.COUNT}:Q"),
-            color=alt.Color(f"{C.QUANTITY_TYPE}:N", scale=QTY_COLOR_SCALE),
+            x=alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
+            y=alt.Y(f"{S.VALUE}:Q"),
+            color=alt.Color(f"{S.METRIC}:N", scale=QTY_COLOR_SCALE),
         )
         .properties(width=WIDTH, height=150)
         .facet(row=alt.Row("collector_type:N", sort=["current", "legacy"]))
@@ -91,10 +87,10 @@ def usage_line_plot(data: pl.DataFrame) -> alt.FacetChart:
 
 
 def usage_facet_plot(data: pl.DataFrame) -> alt.VConcatChart:
-    """Faceted line plot comparing legacy vs current by quantity type."""
+    """Faceted line plot comparing legacy vs current by metric."""
     charts = []
     for qty_type in QTY_ORDER:
-        subset = data.filter(pl.col(C.QUANTITY_TYPE) == qty_type)
+        subset = data.filter(pl.col(S.METRIC) == qty_type)
         if subset.is_empty():
             continue
         qty_color = QTY_COLORS[qty_type]
@@ -103,9 +99,9 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.VConcatChart:
             .mark_line(strokeWidth=1, interpolate="step-after")
             .encode(
                 x=alt.X(
-                    f"{C.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")
+                    f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")
                 ),
-                y=alt.Y(f"{C.COUNT}:Q", title=f"# {qty_type}"),
+                y=alt.Y(f"{S.VALUE}:Q", title=f"# {qty_type}"),
                 color=alt.Color(
                     "collector_type:N",
                     scale=alt.Scale(
@@ -149,10 +145,10 @@ def source_facet_plot(data: pl.DataFrame) -> alt.FacetChart:
         alt.Chart(data)
         .mark_line(interpolate="step-after")
         .encode(
-            x=alt.X("timestamp:T", axis=alt.Axis(format="%Y", tickCount="year")),
-            y=alt.Y("count:Q"),
+            x=alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year")),
+            y=alt.Y(f"{S.VALUE}:Q"),
             color="source:N",
         )
         .properties(width=500, height=120)
-        .facet(row="quantity_type:N")
+        .facet(row=f"{S.METRIC}:N")
     )

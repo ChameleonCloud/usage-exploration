@@ -11,7 +11,7 @@ USE run_pipeline() for the standard flow. Individual functions for custom pipeli
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import QuantityTypes as QT, SchemaCols as S
 from chameleon_usage.math import sweepline, timeseries
 from chameleon_usage.schemas import (
     IntervalModel,
@@ -74,9 +74,9 @@ def align_timestamps(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
     """
     df = TimelineModel.validate(df)
     result = timeseries.align_step_functions(
-        df, "timestamp", "count", list(spec.group_cols)
+        df, "timestamp", "value", list(spec.group_cols)
     )
-    return result.with_columns(pl.col("count").fill_null(0))
+    return result.with_columns(pl.col("value").fill_null(0))
 
 
 def resample(df: pl.LazyFrame, interval: str, spec: PipelineSpec) -> pl.LazyFrame:
@@ -86,9 +86,9 @@ def resample(df: pl.LazyFrame, interval: str, spec: PipelineSpec) -> pl.LazyFram
     """
     df = TimelineModel.validate(df)
     result = timeseries.resample_step_function(
-        df, "timestamp", "count", interval, list(spec.group_cols), spec.time_range
+        df, "timestamp", "value", interval, list(spec.group_cols), spec.time_range
     )
-    return result.with_columns(pl.col("count").fill_null(0))
+    return result.with_columns(pl.col("value").fill_null(0))
 
 
 def collapse_dimension(
@@ -107,7 +107,7 @@ def collapse_dimension(
     new_cols = tuple(c for c in spec.group_cols if c != drop)
     new_spec = PipelineSpec(group_cols=new_cols, time_range=spec.time_range)
 
-    result = df.group_by("timestamp", *new_cols).agg(pl.col("count").sum())
+    result = df.group_by("timestamp", *new_cols).agg(pl.col("value").sum())
     return result, new_spec
 
 
@@ -120,9 +120,9 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
     df = TimelineModel.validate(df)
 
     # Pivot needs all non-value columns as index
-    index_cols = ["timestamp", *[c for c in spec.group_cols if c != "quantity_type"]]
+    index_cols = ["timestamp", *[c for c in spec.group_cols if c != "metric"]]
 
-    pivoted = df.collect().pivot(on="quantity_type", index=index_cols, values="count")
+    pivoted = df.collect().pivot(on="metric", index=index_cols, values="value")
     cols = pivoted.columns
 
     if QT.RESERVABLE in cols and QT.COMMITTED in cols:
@@ -137,9 +137,9 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
 
     result = (
         pivoted.unpivot(
-            index=index_cols, variable_name="quantity_type", value_name="count"
+            index=index_cols, variable_name="metric", value_name="value"
         )
-        .drop_nulls("count")
+        .drop_nulls(S.VALUE)
         .lazy()
     )
 
