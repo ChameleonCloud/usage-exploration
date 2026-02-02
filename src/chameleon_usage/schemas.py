@@ -46,6 +46,8 @@ class IntervalSchema(pa.DataFrameModel):
     start: pl.Datetime
     end: pl.Datetime = pa.Field(nullable=True)
     quantity_type: str
+    resource_type: str
+    resource_value: float
 
 
 class CountSchema(pa.DataFrameModel):

@@ -13,6 +13,9 @@ class BlazarHostRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     hypervisor_hostname: str = pa.Field()
     hypervisor_type: str = pa.Field()
+    vcpus: int  # copied from nova computenode on create
+    memory_mb: int  # copied from nova computenode on create
+    local_gb: int  # copied from nova computenode on create
 
 
 class BlazarLeaseRaw(pa.DataFrameModel):
@@ -44,6 +47,12 @@ class NovaHostRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     hypervisor_hostname: str = pa.Field(coerce=True)
     hypervisor_type: str = pa.Field(coerce=True)
+    vcpus: int
+    memory_mb: int
+    local_gb: int
+    cpu_allocation_ratio: float
+    ram_allocation_ratio: float
+    disk_allocation_ratio: float
 
 
 class NovaServiceRaw(pa.DataFrameModel):
@@ -61,6 +70,9 @@ class NovaInstanceRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     host: str = pa.Field()
     node: str = pa.Field()
+    vcpus: int
+    memory_mb: int
+    root_gb: int
 
 
 class NovaRequestSpecRaw(pa.DataFrameModel):

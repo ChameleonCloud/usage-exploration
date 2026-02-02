@@ -3,6 +3,14 @@ Constants defined in one place for reuse.
 """
 
 
+class ResourceTypes:
+    NODE = "nodes"
+    VCPUS = "vcpus"
+    MEMORY_MB = "memory_mb"
+    DISK_GB = "disk_gb"
+    GPUS = "gpus"
+
+
 class Tables:
     NOVA_HOSTS = "nova_hosts"
     NOVA_INSTANCES = "nova_instances"
