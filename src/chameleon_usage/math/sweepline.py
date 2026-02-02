@@ -18,7 +18,6 @@ import polars as pl
 # Module-private constants
 _DELTA_COL = "change"
 _TIME_COL = "timestamp"
-# TODO value_col
 
 
 def intervals_to_deltas(
@@ -26,17 +25,24 @@ def intervals_to_deltas(
     start_col: str,
     end_col: str,
     group_cols: list[str],
+    value_col: str | None = None,
 ) -> pl.LazyFrame:
-    """[start, end) intervals → +1 at start, -1 at end."""
+    """[start, end) intervals → +value at start, -value at end.
+
+    Args:
+        value_col: Column with resource quantity. If None, counts intervals (+1/-1).
+    """
+    delta_expr = pl.col(value_col) if value_col else pl.lit(1)
+
     starts = df.select(
         pl.col(start_col).alias(_TIME_COL),
         *[pl.col(c) for c in group_cols],
-        pl.lit(1).alias(_DELTA_COL),
+        delta_expr.alias(_DELTA_COL),
     )
     ends = df.filter(pl.col(end_col).is_not_null()).select(
         pl.col(end_col).alias(_TIME_COL),
         *[pl.col(c) for c in group_cols],
-        pl.lit(-1).alias(_DELTA_COL),
+        (-delta_expr).alias(_DELTA_COL),
     )
     return pl.concat([starts, ends])
 
@@ -60,7 +66,13 @@ def intervals_to_counts(
     start_col: str,
     end_col: str,
     group_cols: list[str],
+    value_col: str | None = None,
 ) -> pl.LazyFrame:
-    deltas = intervals_to_deltas(df, start_col, end_col, group_cols)
+    """Convert intervals to cumulative counts.
+
+    Args:
+        value_col: Column with resource quantity. If None, counts intervals.
+    """
+    deltas = intervals_to_deltas(df, start_col, end_col, group_cols, value_col)
     counts = deltas_to_counts(deltas, group_cols)
     return counts

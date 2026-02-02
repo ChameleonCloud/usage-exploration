@@ -59,6 +59,22 @@ def test_deltas_skips_null_end():
     assert deltas["change"][0] == 1
 
 
+def test_deltas_uses_value_column():
+    """Deltas should use actual value (e.g., vcpus=32), not just +1/-1."""
+    df = pl.LazyFrame(
+        {
+            "start": [datetime(2024, 1, 1)],
+            "end": [datetime(2024, 1, 2)],
+            "group": ["a"],
+            "vcpus": [32],
+        }
+    )
+    deltas = intervals_to_deltas(df, "start", "end", ["group"], value_col="vcpus").collect()
+
+    assert deltas.filter(pl.col("timestamp") == datetime(2024, 1, 1))["change"][0] == 32
+    assert deltas.filter(pl.col("timestamp") == datetime(2024, 1, 2))["change"][0] == -32
+
+
 # MISSING: preserves group columns, multiple group columns
 
 
