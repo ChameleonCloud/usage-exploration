@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 from pandera.typing.polars import LazyFrame
 
 
@@ -39,36 +40,52 @@ class PipelineSpec:
         return df
 
 
-class IntervalSchema(pa.DataFrameModel):
+class IntervalModel(pa.DataFrameModel):
     """Output of adapters, input to intervals_to_counts."""
 
     entity_id: str
     start: pl.Datetime
     end: pl.Datetime = pa.Field(nullable=True)
-    quantity_type: str
-    resource_type: str
-    resource_value: float
+    metric: str
+    resource: str
+    value: float
+
+    class Config(BaseConfig):
+        strict = True  # make sure all specified columns are in the validated dataframe
+        ordered = True  #: validate columns order
+        # Columns that are "values" not dimensions
+        value_cols = ("timestamp", "count")
+
+    @classmethod
+    def group_cols(cls) -> tuple[str, ...]:
+        """Helper to allow chacking group_by columns"""
+        all_cols = set(cls.to_schema().columns.keys())
+        return tuple(all_cols - set(cls.Config.value_cols))
 
 
-class CountSchema(pa.DataFrameModel):
+class TimelineModel(pa.DataFrameModel):
     """Output of intervals_to_counts, input to resample."""
 
     timestamp: pl.Datetime
-    quantity_type: str
-    count: float = pa.Field(coerce=True)
+    metric: str
+    resource: str
+    value: float = pa.Field(coerce=True)
+
+    class Config(BaseConfig):
+        strict = True  # make sure all specified columns are in the validated dataframe
+        ordered = True  #: validate columns order
+        # Columns that are "values" not dimensions
+        value_cols = ("timestamp", "count")
+
+    @classmethod
+    def group_cols(cls) -> tuple[str, ...]:
+        """Helper to allow chacking group_by columns"""
+        all_cols = set(cls.to_schema().columns.keys())
+        return tuple(all_cols - set(cls.Config.value_cols))
 
 
-class UsageSchema(pa.DataFrameModel):
+class UsageModel(TimelineModel):
     """Final output with site context."""
 
-    timestamp: pl.Datetime
-    quantity_type: str
-    count: float = pa.Field(coerce=True)
     site: str
     collector_type: str
-
-
-# Type aliases
-IntervalFrame = LazyFrame[IntervalSchema]
-CountFrame = LazyFrame[CountSchema]
-UsageFrame = LazyFrame[UsageSchema]

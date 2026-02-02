@@ -66,7 +66,7 @@ class AdapterRegistry:
 
             intervals.append(normalized)
 
-        return pl.concat(intervals, how="diagonal")
+        return pl.concat(intervals, how="diagonal").lazy()
 
 
 def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:

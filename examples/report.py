@@ -14,7 +14,7 @@ from chameleon_usage.pipeline import (
     intervals_to_counts,
     resample,
 )
-from chameleon_usage.schemas import PipelineSpec, UsageSchema
+from chameleon_usage.schemas import PipelineSpec, UsageModel
 from chameleon_usage.viz.plots import make_plots
 
 TIME_RANGE = (datetime(2020, 1, 1), datetime(2026, 1, 1))
@@ -50,7 +50,7 @@ def main():
         )
         all_legacy_counts.append(legacy_counts)
 
-    clamped = pl.concat(all_intervals)
+    clamped = pl.concat(all_intervals).lazy()
 
     # DEBUG timing
     cache_clamped = clamped.collect()
@@ -76,13 +76,13 @@ def main():
 
     # legacy counts are already time-aligned and have derived metrics, just resample to match.
     # TODO: got real messy
-    valid_current_counts = UsageSchema.validate(usage_with_derived, lazy=True)
+    valid_current_counts = UsageModel.validate(usage_with_derived, lazy=True)
     all_legacy_counts = pl.concat(all_legacy_counts)
-    valid_legacy_counts = UsageSchema.validate(all_legacy_counts, lazy=True)
+    valid_legacy_counts = UsageModel.validate(all_legacy_counts, lazy=True)
     all_counts = pl.concat(
         [valid_current_counts, valid_legacy_counts],
         how="diagonal",
-    )
+    ).lazy()
 
     usage = resample(all_counts, BUCKET_LENGTH, spec)
 

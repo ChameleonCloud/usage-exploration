@@ -1,4 +1,4 @@
-"""Transform legacy usage data to UsageSchema.
+"""Transform legacy usage data to UsageModel.
 
 Legacy data is pre-aggregated (hours per day per node_type), so it bypasses
 the interval->cumsum pipeline entirely.
@@ -23,7 +23,7 @@ from pandera.typing.polars import LazyFrame as LazyGeneric
 from chameleon_usage.constants import Cols as C
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.ingest import rawschemas as raw
-from chameleon_usage.schemas import UsageSchema
+from chameleon_usage.schemas import UsageModel
 
 HOURS_PER_DAY = 24
 
@@ -90,8 +90,8 @@ def _to_long_format(wide: pl.LazyFrame) -> pl.LazyFrame:
 
 def get_legacy_usage_counts(
     base_path: str, site_name: str, collector_type: str
-) -> LazyGeneric[UsageSchema]:
-    """Transform legacy usage cache to UsageSchema."""
+) -> LazyGeneric[UsageModel]:
+    """Transform legacy usage cache to UsageModel."""
 
     usage_cache = load_legacy_usage_cache(base_path, site_name)
     aggregated = _aggregate_hours_by_date(usage_cache)
@@ -102,4 +102,4 @@ def get_legacy_usage_counts(
         pl.lit(site_name).alias("site"),
         pl.lit("legacy").alias("collector_type"),
     )
-    return UsageSchema.validate(long_output)
+    return UsageModel.validate(long_output)
