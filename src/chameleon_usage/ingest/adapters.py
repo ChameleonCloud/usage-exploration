@@ -6,6 +6,7 @@ from typing import Callable
 import polars as pl
 
 from chameleon_usage.constants import SchemaCols as S, Tables
+from chameleon_usage.schemas import IntervalModel
 
 RawTables = dict[str, pl.LazyFrame]
 
@@ -64,6 +65,8 @@ class AdapterRegistry:
             if adapter.resource_cols:
                 normalized = self._inflate_resources(normalized, adapter.resource_cols)
 
+            # Validate core columns present - fails early, identifies which adapter broke
+            IntervalModel.validate(normalized)
             intervals.append(normalized)
 
         return pl.concat(intervals, how="diagonal").lazy()

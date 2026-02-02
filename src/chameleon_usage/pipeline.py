@@ -11,7 +11,8 @@ USE run_pipeline() for the standard flow. Individual functions for custom pipeli
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT, SchemaCols as S
+from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.math import sweepline, timeseries
 from chameleon_usage.schemas import (
     IntervalModel,
@@ -36,13 +37,17 @@ def run_pipeline(
     Returns:
         Counts with derived metrics, optionally resampled.
     """
+    spec.validate_against(intervals)
+
     counts = intervals_to_counts(intervals, spec)
     counts = clip_to_window(counts, spec)
     aligned = align_timestamps(counts, spec)
     derived = compute_derived_metrics(aligned, spec)
 
     if resample_interval:
-        return resample(derived, resample_interval, spec)
+        resampled = resample(derived, resample_interval, spec)
+        return resampled
+
     return derived
 
 
@@ -54,7 +59,9 @@ def run_pipeline(
 def intervals_to_counts(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
     """Intervals → counts via sweepline."""
     df = IntervalModel.validate(df)
-    result = sweepline.intervals_to_counts(df, "start", "end", list(spec.group_cols))
+    result = sweepline.intervals_to_counts(
+        df, "start", "end", list(spec.group_cols), value_col="value"
+    )
     result = TimelineModel.validate(result)
     return result
 
@@ -84,6 +91,7 @@ def resample(df: pl.LazyFrame, interval: str, spec: PipelineSpec) -> pl.LazyFram
 
     Values persist until next event, contributing proportionally to buckets.
     """
+    spec.validate_against(df)
     df = TimelineModel.validate(df)
     result = timeseries.resample_step_function(
         df, "timestamp", "value", interval, list(spec.group_cols), spec.time_range
@@ -104,6 +112,7 @@ def collapse_dimension(
     if exclude:
         df = df.filter(~pl.col(drop).is_in(exclude))
 
+    print(f"rows into pivot: {df.collect().height}")
     new_cols = tuple(c for c in spec.group_cols if c != drop)
     new_spec = PipelineSpec(group_cols=new_cols, time_range=spec.time_range)
 
@@ -136,9 +145,7 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
         )
 
     result = (
-        pivoted.unpivot(
-            index=index_cols, variable_name="metric", value_name="value"
-        )
+        pivoted.unpivot(index=index_cols, variable_name="metric", value_name="value")
         .drop_nulls(S.VALUE)
         .lazy()
     )

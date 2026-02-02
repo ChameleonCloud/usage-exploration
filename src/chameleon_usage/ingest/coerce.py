@@ -40,6 +40,13 @@ def apply_temporal_clamp(
     join_keys: list[str],
     require_parent: pl.Expr | None = None,
 ) -> pl.LazyFrame:
+    # Fail fast if join keys missing - prevents silent cartesian explosion
+    child_cols = set(children.collect_schema().names())
+    parent_cols = set(parents.collect_schema().names())
+    missing = (set(join_keys) - child_cols) | (set(join_keys) - parent_cols)
+    if missing:
+        raise ValueError(f"Join keys missing: {missing}")
+
     children = children.with_columns(
         pl.col("start").alias("original_start"),
         pl.col("end").alias("original_end"),

@@ -1,10 +1,12 @@
 """Tests for chameleon_usage.schemas"""
 
+from datetime import datetime
+
 import polars as pl
 import pytest
 from pandera.errors import SchemaError
 
-from chameleon_usage.schemas import _OrderedModel
+from chameleon_usage.schemas import _OrderedModel, PipelineSpec
 
 
 class _TestModel(_OrderedModel):
@@ -28,3 +30,14 @@ def test_ordered_model_enforces_schema():
 
     with pytest.raises(SchemaError):
         _TestModel.validate(df)
+
+
+def test_pipeline_spec_validate_against_missing_cols():
+    """Raises when group_cols missing from data."""
+    spec = PipelineSpec(
+        group_cols=("metric", "site"), time_range=(datetime(2024, 1, 1), datetime(2024, 12, 31))
+    )
+    df = pl.LazyFrame({"metric": ["x"], "value": [1]})  # missing 'site'
+
+    with pytest.raises(ValueError, match="group_cols not in data.*site"):
+        spec.validate_against(df)

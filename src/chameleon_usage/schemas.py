@@ -19,6 +19,13 @@ class PipelineSpec:
     group_cols: tuple[str, ...]  # immutable
     time_range: tuple[datetime, datetime]  # immutable, (start, end)
 
+    def validate_against(self, df: "pl.LazyFrame") -> None:
+        """Raise if group_cols not present in dataframe."""
+        data_cols = set(df.collect_schema().names())
+        missing = set(self.group_cols) - data_cols
+        if missing:
+            raise ValueError(f"group_cols not in data: {missing}")
+
 
 class _OrderedModel(pa.DataFrameModel):
     """Base model that coerces column order to match schema.
