@@ -16,7 +16,7 @@ class Adapter:
     quantity_type: str
     source: Callable[[RawTables], pl.LazyFrame]
     context_cols: dict[str, str] = field(default_factory=dict)
-    resource_cols: list[str] = field(default_factory=list)
+    resource_cols: dict[str, pl.Expr] = field(default_factory=dict)
     start_col: str = "created_at"
     end_col: str = "deleted_at"
 
@@ -34,20 +34,24 @@ class AdapterRegistry:
             pl.col(adapter.end_col).alias("end"),
             pl.lit(adapter.quantity_type).alias("quantity_type"),
             *[pl.col(src).alias(dst) for src, dst in adapter.context_cols.items()],
-            *[pl.col(res_col).cast(pl.Float64) for res_col in adapter.resource_cols],
+            *[
+                expr.cast(pl.Float64).alias(resource_name)
+                for resource_name, expr in adapter.resource_cols.items()
+            ],
         )
 
     def _inflate_resources(
         self,
         df: pl.LazyFrame,
-        resource_cols: list[str],
+        resource_cols: dict[str, pl.Expr],
     ) -> pl.LazyFrame:
         """Explode each interval into N rows, one per resource type."""
         all_cols = df.collect_schema().names()
-        index_cols = [c for c in all_cols if c not in resource_cols]
+        resource_col_names = list(resource_cols.keys())
+        index_cols = [c for c in all_cols if c not in resource_col_names]
         return df.unpivot(
             index=index_cols,
-            on=resource_cols,
+            on=resource_col_names,
             variable_name="resource_type",
             value_name="resource_value",
         )
@@ -58,29 +62,37 @@ class AdapterRegistry:
             normalized = self._convert(adapter.source(tables), adapter)
             # HACK: handle case where no resource columns are specified, "unpivot" will explode.
             if adapter.resource_cols:
-                inflated = self._inflate_resources(normalized, adapter.resource_cols)
-            else:
-                inflated = normalized.with_columns(
-                    pl.lit("nodes").alias("resource_type"),
-                    pl.lit(1.0).alias("resource_value"),
-                )
-            intervals.append(inflated)
+                normalized = self._inflate_resources(normalized, adapter.resource_cols)
+
+            intervals.append(normalized)
 
         return pl.concat(intervals, how="diagonal")
 
 
 def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
+    # TODO: also get resources from instance reservations table
     return (
         tables[Tables.BLAZAR_ALLOC]
         .join(
-            tables[Tables.BLAZAR_HOSTS].select(["id", "hypervisor_hostname"]),
+            tables[Tables.BLAZAR_HOSTS].select(
+                [
+                    "id",
+                    "hypervisor_hostname",
+                    "hypervisor_type",
+                    "vcpus",
+                    "memory_mb",
+                    "local_gb",
+                ]
+            ),
             left_on="compute_host_id",
             right_on="id",
             how="left",
             suffix="_host",
         )
         .join(
-            tables[Tables.BLAZAR_RES].select(["id", "lease_id"]),
+            tables[Tables.BLAZAR_RES].select(
+                "id", "lease_id", pl.col("resource_type").alias("reservation_type")
+            ),
             left_on="reservation_id",
             right_on="id",
             how="left",

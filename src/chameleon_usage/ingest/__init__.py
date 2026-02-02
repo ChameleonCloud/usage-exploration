@@ -4,7 +4,7 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.constants import Tables
+from chameleon_usage.constants import ResourceTypes, Tables
 from chameleon_usage.ingest.adapters import (
     Adapter,
     AdapterRegistry,
@@ -25,6 +25,12 @@ novaHostTotal = Adapter(
     context_cols={
         "hypervisor_hostname": "hypervisor_hostname",
     },
+    resource_cols={
+        ResourceTypes.NODE: pl.lit(1),
+        ResourceTypes.VCPUS: pl.col("vcpus"),
+        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
+        ResourceTypes.DISK_GB: pl.col("local_gb"),
+    },
 )
 blazarHostReservable = Adapter(
     entity_col="hypervisor_hostname",
@@ -34,7 +40,25 @@ blazarHostReservable = Adapter(
         "id": "blazar_host_id",
         "hypervisor_hostname": "hypervisor_hostname",
     },
+    resource_cols={
+        ResourceTypes.NODE: pl.lit(1),
+        ResourceTypes.VCPUS: pl.col("vcpus"),
+        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
+        ResourceTypes.DISK_GB: pl.col("local_gb"),
+    },
 )
+
+## Conditions
+is_host_reservation = pl.col("reservation_type").eq("physical:host")
+is_baremetal = pl.col("hypervisor_type").eq("ironic")
+use_host_resources = is_host_reservation | is_baremetal
+
+
+def pick_resource(host_col: str, other_col: str) -> pl.Expr:
+    """Use host resources for baremetal/host-reservations, else use other."""
+    host_expr = pl.col(host_col)
+    other_expr = pl.col(other_col)
+    return pl.when(use_host_resources).then(host_expr).otherwise(other_expr)
 
 
 blazarAllocCommitted = Adapter(
@@ -50,6 +74,13 @@ blazarAllocCommitted = Adapter(
     },
     start_col="effective_start",
     end_col="effective_end",
+    # TODO: Helper expr, depends on host vs flavor res.
+    resource_cols={
+        ResourceTypes.NODE: pl.lit(1),  # TODO flavor fraction
+        ResourceTypes.VCPUS: pick_resource("vcpus", "vcpus"),  # TODO flavor
+        ResourceTypes.MEMORY_MB: pick_resource("memory_mb", "memory_mb"),  # TODO flavor
+        ResourceTypes.DISK_GB: pick_resource("local_gb", "local_gb"),  # TODO flavor
+    },
 )
 novaInstanceOccupied = Adapter(
     entity_col="uuid",
@@ -60,6 +91,13 @@ novaInstanceOccupied = Adapter(
         "blazar_reservation_id": "blazar_reservation_id",
         "booking_type": "booking_type",
         "node": "hypervisor_hostname",
+    },
+    # TODO: depends on host vs flavor reservation
+    resource_cols={
+        ResourceTypes.NODE: pl.lit(1),  # TODO flavor fraction
+        ResourceTypes.VCPUS: pl.col("vcpus"),
+        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
+        ResourceTypes.DISK_GB: pl.col("root_gb"),
     },
 )
 

@@ -31,6 +31,7 @@ class BlazarReservationRaw(pa.DataFrameModel):
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     lease_id: str = pa.Field(unique=True)
+    resource_type: str
 
 
 class BlazarAllocationRaw(pa.DataFrameModel):
