@@ -13,9 +13,9 @@ class BlazarHostRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     hypervisor_hostname: str = pa.Field()
     hypervisor_type: str = pa.Field()
-    vcpus: int  # copied from nova computenode on create
-    memory_mb: int  # copied from nova computenode on create
-    local_gb: int  # copied from nova computenode on create
+    vcpus: int = pa.Field(coerce=True)  # copied from nova computenode on create
+    memory_mb: int = pa.Field(coerce=True)  # copied from nova computenode on create
+    local_gb: int = pa.Field(coerce=True)  # copied from nova computenode on create
 
 
 class BlazarLeaseRaw(pa.DataFrameModel):
@@ -47,12 +47,12 @@ class NovaHostRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     hypervisor_hostname: str = pa.Field(coerce=True)
     hypervisor_type: str = pa.Field(coerce=True)
-    vcpus: int
-    memory_mb: int
-    local_gb: int
-    cpu_allocation_ratio: float
-    ram_allocation_ratio: float
-    disk_allocation_ratio: float
+    vcpus: int = pa.Field(coerce=True)  # int32 -> int64
+    memory_mb: int = pa.Field(coerce=True)  # int32 -> int64
+    local_gb: int = pa.Field(coerce=True)  # int32 -> int64
+    cpu_allocation_ratio: float = pa.Field(coerce=True)  # float32 -> float64
+    ram_allocation_ratio: float = pa.Field(coerce=True)  # float32 -> float64
+    disk_allocation_ratio: float = pa.Field(coerce=True)  # float32 -> float64
 
 
 class NovaServiceRaw(pa.DataFrameModel):
@@ -70,9 +70,9 @@ class NovaInstanceRaw(pa.DataFrameModel):
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     host: str = pa.Field()
     node: str = pa.Field()
-    vcpus: int
-    memory_mb: int
-    root_gb: int
+    vcpus: int = pa.Field(coerce=True)
+    memory_mb: int = pa.Field(coerce=True)
+    root_gb: int = pa.Field(coerce=True)
 
 
 class NovaRequestSpecRaw(pa.DataFrameModel):
