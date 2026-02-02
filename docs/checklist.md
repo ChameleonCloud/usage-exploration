@@ -25,14 +25,12 @@
   - [x] Format output with site, collector type columns.
 - [ ] Build Usage Timeline output table.
   - [x] site, timestamp, collector type, count type, value. <!-- models/domain.py:24-27 partial: has timestamp, quantity_type, count; missing site, collector type -->
-  - [ ] Uniqueness: 1 row per site + timestamp + collector type + count type.
 - [x] Compute derived states.
   - [x] Available = Reservable - Committed. <!-- pipeline.py:34 -->
   - [x] Idle = Committed - Occupied. <!-- pipeline.py:35 -->
 - [x] Produce usage plots.
   - [x] Legacy vs current facets: output/plots/chi_tacc_facet.png, output/plots/chi_uc_facet.png. <!-- plots.py:93-145 -->
   - [x] Usage stack: output/plots/chi_tacc_stack.png, output/plots/chi_uc_stack.png. <!-- plots.py:34-74 -->
-  - [ ] Cross-site utilization: output/plots/cross_site_usage.png.
 - [ ] Produce comparison output.
   - [ ] Artifact comparing uncorrected vs legacy with defined join keys.
 - [ ] Build Leadtime Timeline output table.
@@ -61,7 +59,7 @@
   - [ ] node type.
   - [ ] hypervisor hostname.
 - [x] Produce KVM usage stack plot: output/plots/kvm_tacc_stack.png. <!-- pipeline.py:92 -->
-- [ ] Add KVM to cross-site utilization (yellow color).
+- [ ] Cross-site utilization plot: output/plots/cross_site_usage.png (blocked by resource types + KVM normalization).
 - [ ] Add leadtime plot comparison: requested vs effective.
 
 
