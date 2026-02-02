@@ -120,11 +120,6 @@ def usage_facet_plot(data: pl.DataFrame) -> alt.VConcatChart:
                     ),
                     legend=None,
                 ),
-                opacity=alt.Opacity(
-                    "collector_type:N",
-                    scale=alt.Scale(domain=["current", "legacy"], range=[1, 0.5]),
-                    legend=None,
-                ),
             )
             .properties(width=WIDTH, height=120)
         )
