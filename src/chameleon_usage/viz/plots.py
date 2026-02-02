@@ -29,15 +29,30 @@ QTY_ORDER = [QT.TOTAL, QT.RESERVABLE, QT.AVAILABLE, QT.COMMITTED, QT.IDLE, QT.OC
 QTY_COLOR_SCALE = alt.Scale(domain=QTY_ORDER, range=[QTY_COLORS[t] for t in QTY_ORDER])
 
 
-def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
+def usage_stack_plot(
+    data: pl.DataFrame,
+    stack_metrics: list[str] | None = None,
+    line_metrics: list[str] | None = None,
+) -> alt.LayerChart:
+    """Stacked area chart with overlay lines.
+
+    Args:
+        data: Usage timeseries with metric column
+        stack_metrics: Mutually exclusive metrics to stack (must sum to reservable).
+                       Default: [occupied, idle, available]
+        line_metrics: Metrics to show as overlay lines. Default: [total, reservable]
+    """
+    if stack_metrics is None:
+        stack_metrics = [QT.OCCUPIED, QT.IDLE, QT.AVAILABLE]
+    if line_metrics is None:
+        line_metrics = [QT.TOTAL, QT.RESERVABLE]
+
     base = alt.Chart(data)
     x_time = alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year"))
 
-    area_types = [QT.OCCUPIED, QT.IDLE, QT.COMMITTED, QT.AVAILABLE]
-
     areas = (
-        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=area_types))
-        .transform_calculate(stack_order=f"indexof({area_types}, datum.{S.METRIC})")
+        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=stack_metrics))
+        .transform_calculate(stack_order=f"indexof({stack_metrics}, datum.{S.METRIC})")
         .mark_area(interpolate="step-after")
         .encode(
             x=x_time,
@@ -47,8 +62,8 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
         )
     )
 
-    line_total = (
-        base.transform_filter(alt.datum.metric == "total")
+    lines = (
+        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=line_metrics))
         .mark_line(strokeWidth=2, interpolate="step-after")
         .encode(
             x=x_time,
@@ -57,17 +72,7 @@ def usage_stack_plot(data: pl.DataFrame) -> alt.LayerChart:
         )
     )
 
-    line_reservable = (
-        base.transform_filter(alt.datum.metric == "reservable")
-        .mark_line(strokeWidth=2, strokeDash=[4, 4], interpolate="step-after")
-        .encode(
-            x=x_time,
-            y=alt.Y(f"{S.VALUE}:Q"),
-            color=alt.Color(f"{S.METRIC}:N", scale=QTY_COLOR_SCALE),
-        )
-    )
-
-    return areas + line_total + line_reservable
+    return areas + lines
 
 
 def usage_line_plot(data: pl.DataFrame) -> alt.FacetChart:
