@@ -20,7 +20,7 @@ from chameleon_usage.ingest.loader import load_raw_tables
 
 novaHostTotal = Adapter(
     entity_col="hypervisor_hostname",
-    quantity_type="total",
+    metric="total",
     source=lambda t: t[Tables.NOVA_HOSTS],
     context_cols={
         "hypervisor_hostname": "hypervisor_hostname",
@@ -34,7 +34,7 @@ novaHostTotal = Adapter(
 )
 blazarHostReservable = Adapter(
     entity_col="hypervisor_hostname",
-    quantity_type="reservable",
+    metric="reservable",
     source=lambda t: t[Tables.BLAZAR_HOSTS],
     context_cols={
         "id": "blazar_host_id",
@@ -63,7 +63,7 @@ def pick_resource(host_col: str, other_col: str) -> pl.Expr:
 
 blazarAllocCommitted = Adapter(
     entity_col="id",  # allocation ID
-    quantity_type="committed",
+    metric="committed",
     source=blazar_allocations_source,
     context_cols={
         "id": "blazar_allocation_id",
@@ -84,7 +84,7 @@ blazarAllocCommitted = Adapter(
 )
 novaInstanceOccupied = Adapter(
     entity_col="uuid",
-    quantity_type="occupied",
+    metric="occupied",
     source=nova_instances_source,
     context_cols={
         "uuid": "instance_id",

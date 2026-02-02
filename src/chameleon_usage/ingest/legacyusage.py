@@ -101,5 +101,6 @@ def get_legacy_usage_counts(
     long_output = _to_long_format(wide).with_columns(
         pl.lit(site_name).alias("site"),
         pl.lit("legacy").alias("collector_type"),
+        pl.lit("nodes").alias(S.RESOURCE),
     )
     return UsageModel.validate(long_output)

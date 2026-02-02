@@ -30,6 +30,9 @@ All rows preserved. Downstream filters on `valid`.
 
 import polars as pl
 
+from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import SchemaCols as S
+
 
 def apply_temporal_clamp(
     children: pl.LazyFrame,
@@ -133,23 +136,23 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     Returns:
         Intervals with valid, coerce_action, original_start, original_end added.
     """
-    total = intervals.filter(pl.col("quantity_type").eq("total"))
-    reservable = intervals.filter(pl.col("quantity_type").eq("reservable"))
-    committed = intervals.filter(pl.col("quantity_type").eq("committed"))
-    occupied = intervals.filter(pl.col("quantity_type").eq("occupied"))
+    total = intervals.filter(pl.col(S.METRIC).eq(QT.TOTAL))
+    reservable = intervals.filter(pl.col(S.METRIC).eq(QT.RESERVABLE))
+    committed = intervals.filter(pl.col(S.METRIC).eq(QT.COMMITTED))
+    occupied = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED))
 
     clamped_reservable = apply_temporal_clamp(
-        reservable, parents=total, join_keys=["hypervisor_hostname", "resource_type"]
+        reservable, parents=total, join_keys=["hypervisor_hostname", S.RESOURCE]
     )
     clamped_committed = apply_temporal_clamp(
         committed,
         parents=clamped_reservable,
-        join_keys=["blazar_host_id", "resource_type"],
+        join_keys=["blazar_host_id", S.RESOURCE],
     )
     # Deduplicate allocations per (hostname, reservation_id) for instance matching
     # flavor:instance reservations create many allocations per host with same time window
     committed_for_occupied = clamped_committed.unique(
-        subset=["hypervisor_hostname", "blazar_reservation_id", "resource_type"],
+        subset=["hypervisor_hostname", "blazar_reservation_id", S.RESOURCE],
         keep="first",
     )
     # Only reserved instances (booking_type="reservation") need allocation parents
@@ -157,7 +160,7 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     clamped_occupied = apply_temporal_clamp(
         occupied,
         parents=committed_for_occupied,
-        join_keys=["blazar_reservation_id", "hypervisor_hostname", "resource_type"],
+        join_keys=["blazar_reservation_id", "hypervisor_hostname", S.RESOURCE],
         require_parent=pl.col("booking_type").eq("reservation"),
     )
 

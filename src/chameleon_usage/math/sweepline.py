@@ -7,10 +7,10 @@ Dataframe in -> Dataframe out.
 
 These methods must *never* call collect()
 
-adapters → intervals [entity_id, start, end, quantity_type, source]
+adapters → intervals [entity_id, start, end, metric, source]
   → core.intervals_to_deltas
   → core.deltas_to_counts
-  → usage [timestamp, quantity_type, value]
+  → usage [timestamp, metric, value]
 """
 
 import polars as pl

@@ -5,7 +5,7 @@ from typing import Callable
 
 import polars as pl
 
-from chameleon_usage.constants import Tables
+from chameleon_usage.constants import SchemaCols as S, Tables
 
 RawTables = dict[str, pl.LazyFrame]
 
@@ -13,7 +13,7 @@ RawTables = dict[str, pl.LazyFrame]
 @dataclass
 class Adapter:
     entity_col: str
-    quantity_type: str
+    metric: str
     source: Callable[[RawTables], pl.LazyFrame]
     context_cols: dict[str, str] = field(default_factory=dict)
     resource_cols: dict[str, pl.Expr] = field(default_factory=dict)
@@ -32,7 +32,7 @@ class AdapterRegistry:
             pl.col(adapter.entity_col).alias("entity_id"),
             pl.col(adapter.start_col).alias("start"),
             pl.col(adapter.end_col).alias("end"),
-            pl.lit(adapter.quantity_type).alias("quantity_type"),
+            pl.lit(adapter.metric).alias(S.METRIC),
             *[pl.col(src).alias(dst) for src, dst in adapter.context_cols.items()],
             *[
                 expr.cast(pl.Float64).alias(resource_name)
@@ -52,8 +52,8 @@ class AdapterRegistry:
         return df.unpivot(
             index=index_cols,
             on=resource_col_names,
-            variable_name="resource_type",
-            value_name="resource_value",
+            variable_name=S.RESOURCE,
+            value_name=S.VALUE,
         )
 
     def to_intervals(self, tables: RawTables) -> pl.LazyFrame:

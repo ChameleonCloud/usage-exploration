@@ -20,26 +20,21 @@ class PipelineSpec:
     time_range: tuple[datetime, datetime]  # immutable, (start, end)
 
 
-class IntervalModel(pa.DataFrameModel):
-    """IntervalAdapters MUST produce this format."""
+class _OrderedModel(pa.DataFrameModel):
+    """Base model that coerces column order to match schema.
 
-    entity_id: str
-    start: pl.Datetime
-    end: pl.Datetime = pa.Field(nullable=True)
-    metric: str
-    resource: str
-    value: float
+    See https://github.com/unionai-oss/pandera/issues/1317
+    """
 
-    # Columns that are "values" not dimensions
-    _value_cols: ClassVar[tuple[str, ...]] = ("start", "end", "value")
+    _value_cols: ClassVar[tuple[str, ...]] = ()
 
     class Config(BaseConfig):
-        strict = True  # make sure all specified columns are in the validated dataframe
-        ordered = True  #: validate columns order
+        strict = True
+        ordered = True
 
     @classmethod
     def group_cols(cls) -> tuple[str, ...]:
-        """Helper to allow checking group_by columns."""
+        """Non-value columns in sorted order."""
         all_cols = set(cls.to_schema().columns.keys())
         return tuple(sorted(all_cols - set(cls._value_cols)))
 
@@ -50,7 +45,20 @@ class IntervalModel(pa.DataFrameModel):
         return super().validate(check_obj, *args, **kwargs)
 
 
-class TimelineModel(pa.DataFrameModel):
+class IntervalModel(_OrderedModel):
+    """IntervalAdapters MUST produce this format."""
+
+    entity_id: str
+    start: pl.Datetime
+    end: pl.Datetime = pa.Field(nullable=True, coerce=True)
+    metric: str
+    resource: str
+    value: float
+
+    _value_cols: ClassVar[tuple[str, ...]] = ("start", "end", "value")
+
+
+class TimelineModel(_OrderedModel):
     """Output of intervals_to_counts, input to resample."""
 
     timestamp: pl.Datetime
@@ -59,21 +67,6 @@ class TimelineModel(pa.DataFrameModel):
     resource: str
 
     _value_cols: ClassVar[tuple[str, ...]] = ("timestamp", "value")
-
-    class Config(BaseConfig):
-        strict = True
-        ordered = True
-
-    @classmethod
-    def group_cols(cls) -> tuple[str, ...]:
-        all_cols = set(cls.to_schema().columns.keys())
-        return tuple(sorted(all_cols - set(cls._value_cols)))
-
-    @classmethod
-    def validate(cls, check_obj, *args, **kwargs):
-        """Reorder columns to match schema, then validate."""
-        check_obj = check_obj.select(*cls.to_schema().columns.keys())
-        return super().validate(check_obj, *args, **kwargs)
 
 
 class UsageModel(TimelineModel):
