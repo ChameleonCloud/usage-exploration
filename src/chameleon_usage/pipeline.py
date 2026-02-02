@@ -13,7 +13,12 @@ import polars as pl
 
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.math import sweepline, timeseries
-from chameleon_usage.schemas import PipelineSpec
+from chameleon_usage.schemas import (
+    IntervalModel,
+    PipelineSpec,
+    TimelineModel,
+    UsageModel,
+)
 
 
 def run_pipeline(
@@ -48,15 +53,15 @@ def run_pipeline(
 
 def intervals_to_counts(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
     """Intervals → counts via sweepline."""
-    spec.validate_stage(df, "interval")
+    df = IntervalModel.validate(df)
     result = sweepline.intervals_to_counts(df, "start", "end", list(spec.group_cols))
-    spec.validate_stage(result, "count")
+    result = TimelineModel.validate(result)
     return result
 
 
 def clip_to_window(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
     """Drop events after window end. Keep pre-window events for join_asof."""
-    spec.validate_stage(df, "count")
+    df = TimelineModel.validate(df)
     _, end = spec.time_range
     return df.filter(pl.col("timestamp") <= end)
 
@@ -67,7 +72,7 @@ def align_timestamps(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
     Required before compute_derived_metrics - can't subtract misaligned series.
     Fills nulls with 0 (sweepline counts are 0 before first event, not null).
     """
-    spec.validate_stage(df, "count")
+    df = TimelineModel.validate(df)
     result = timeseries.align_step_functions(
         df, "timestamp", "count", list(spec.group_cols)
     )
@@ -79,7 +84,7 @@ def resample(df: pl.LazyFrame, interval: str, spec: PipelineSpec) -> pl.LazyFram
 
     Values persist until next event, contributing proportionally to buckets.
     """
-    spec.validate_stage(df, "count")
+    df = TimelineModel.validate(df)
     result = timeseries.resample_step_function(
         df, "timestamp", "count", interval, list(spec.group_cols), spec.time_range
     )
@@ -112,7 +117,7 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
     available = reservable - committed
     idle = committed - occupied
     """
-    spec.validate_stage(df, "count")
+    df = TimelineModel.validate(df)
 
     # Pivot needs all non-value columns as index
     index_cols = ["timestamp", *[c for c in spec.group_cols if c != "quantity_type"]]
@@ -138,7 +143,7 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
         .lazy()
     )
 
-    spec.validate_stage(result, "count")
+    result = TimelineModel.validate(result)
     return result
 
 
@@ -146,7 +151,7 @@ def add_site_context(
     df: pl.LazyFrame, spec: PipelineSpec, site: str, collector_type: str = "current"
 ) -> pl.LazyFrame:
     """Add site and collector_type columns."""
-    spec.validate_stage(df, "count")
+    df = TimelineModel.validate(df)
     return df.with_columns(
         pl.lit(site).alias("site"),
         pl.lit(collector_type).alias("collector_type"),

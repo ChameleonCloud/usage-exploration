@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import ClassVar
 
 import pandera.polars as pa
 import polars as pl
 from pandera.api.polars.model_config import BaseConfig
-from pandera.typing.polars import LazyFrame
 
 
 @dataclass
@@ -19,29 +19,9 @@ class PipelineSpec:
     group_cols: tuple[str, ...]  # immutable
     time_range: tuple[datetime, datetime]  # immutable, (start, end)
 
-    @property
-    def interval_required(self) -> set[str]:
-        return {"entity_id", "start", "end", *self.group_cols}
-
-    @property
-    def delta_required(self) -> set[str]:
-        return {"timestamp", "change", *self.group_cols}
-
-    @property
-    def count_required(self) -> set[str]:
-        return {"timestamp", "count", *self.group_cols}
-
-    def validate_stage(self, df: pl.LazyFrame, stage: str) -> pl.LazyFrame:
-        required = getattr(self, f"{stage}_required")
-        actual = set(df.collect_schema().names())
-        missing = required - actual
-        if missing:
-            raise ValueError(f"Stage {stage} missing columns: {missing}")
-        return df
-
 
 class IntervalModel(pa.DataFrameModel):
-    """Output of adapters, input to intervals_to_counts."""
+    """IntervalAdapters MUST produce this format."""
 
     entity_id: str
     start: pl.Datetime
@@ -50,17 +30,18 @@ class IntervalModel(pa.DataFrameModel):
     resource: str
     value: float
 
+    # Columns that are "values" not dimensions
+    _value_cols: ClassVar[tuple[str, ...]] = ("start", "end", "value")
+
     class Config(BaseConfig):
         strict = True  # make sure all specified columns are in the validated dataframe
         ordered = True  #: validate columns order
-        # Columns that are "values" not dimensions
-        value_cols = ("timestamp", "count")
 
     @classmethod
     def group_cols(cls) -> tuple[str, ...]:
         """Helper to allow chacking group_by columns"""
         all_cols = set(cls.to_schema().columns.keys())
-        return tuple(all_cols - set(cls.Config.value_cols))
+        return tuple(all_cols - set(cls._value_cols))
 
 
 class TimelineModel(pa.DataFrameModel):
@@ -75,7 +56,7 @@ class TimelineModel(pa.DataFrameModel):
         strict = True  # make sure all specified columns are in the validated dataframe
         ordered = True  #: validate columns order
         # Columns that are "values" not dimensions
-        value_cols = ("timestamp", "count")
+        value_cols = ("timestamp", "value")
 
     @classmethod
     def group_cols(cls) -> tuple[str, ...]:
