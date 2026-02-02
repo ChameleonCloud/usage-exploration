@@ -5,10 +5,9 @@ Constants defined in one place for reuse.
 
 class ResourceTypes:
     NODE = "nodes"
-    VCPUS = "vcpus"  # Includes overcommit
-    VCPUS_PHYSICAL = "vcpus_physical"  # hardware cores, may include SMP
-    MEMORY_MB = "memory_mb"  # includes overcommit
-    MEMORY_MB_PHYSICAL = "memory_mb_physical"
+    VCPUS_OVERCOMMIT = "vcpus_overcommit"
+    VCPUS = "vcpus"
+    MEMORY_MB = "memory_mb"
     DISK_GB = "disk_gb"
     GPUS = "gpus"
 
@@ -22,6 +21,7 @@ class Tables:
     BLAZAR_HOSTS = "blazar_hosts"
     BLAZAR_ALLOC = "blazar_alloc"
     BLAZAR_RES = "blazar_res"
+    BLAZAR_INSTANCE_RES = "blazar_instance_res"
     BLAZAR_LEASES = "blazar_leases"
 
 

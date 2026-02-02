@@ -14,7 +14,7 @@ from chameleon_usage.viz.plots import make_plots
 
 SITES = ["chi_uc", "chi_tacc", "kvm_tacc"]
 TIME_RANGE = (datetime(2015, 1, 1), datetime(2026, 1, 1))
-BUCKET_LENGTH = "1d"
+BUCKET_LENGTH = "7d"
 SPEC = PipelineSpec(
     group_cols=("metric", "resource", "site", "collector_type"), time_range=TIME_RANGE
 )
@@ -71,7 +71,7 @@ def main():
     site_resources = {
         "chi_tacc": [RT.NODE],
         "chi_uc": [RT.NODE],
-        "kvm_tacc": [RT.VCPUS, RT.VCPUS_PHYSICAL],
+        "kvm_tacc": [RT.VCPUS],
     }
 
     for site_name in SITES:

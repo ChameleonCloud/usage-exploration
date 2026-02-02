@@ -42,6 +42,13 @@ class BlazarAllocationRaw(pa.DataFrameModel):
     reservation_id: str = pa.Field(unique=True)
 
 
+class BlazarInstanceReservationRaw(pa.DataFrameModel):
+    reservation_id: str = pa.Field()
+    vcpus: int = pa.Field(coerce=True)
+    memory_mb: int = pa.Field(coerce=True)
+    disk_gb: int = pa.Field(coerce=True)
+
+
 class NovaHostRaw(pa.DataFrameModel):
     id: str = pa.Field(unique=True, coerce=True)
     created_at: pl.Datetime = pa.Field(coerce=True)

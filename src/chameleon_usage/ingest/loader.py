@@ -27,6 +27,9 @@ def load_raw_tables(base_path: str, site_name: str) -> dict[str, pl.LazyFrame]:
         Tables.BLAZAR_LEASES: raw.BlazarLeaseRaw.validate(
             pl.scan_parquet(f"{path}/blazar.leases.parquet")
         ),
+        Tables.BLAZAR_INSTANCE_RES: raw.BlazarInstanceReservationRaw.validate(
+            pl.scan_parquet(f"{path}/blazar.instance_reservations.parquet")
+        ),
         Tables.NOVA_INSTANCES: raw.NovaInstanceRaw.validate(
             pl.scan_parquet(f"{path}/nova.instances.parquet")
         ),

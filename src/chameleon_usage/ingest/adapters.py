@@ -73,52 +73,87 @@ class AdapterRegistry:
         return pl.concat(intervals, how="diagonal").lazy()
 
 
+def _blazar_hosts(tables: RawTables) -> pl.LazyFrame:
+    """Host info keyed by compute_host_id."""
+    return tables[Tables.BLAZAR_HOSTS].select(
+        pl.col("id").alias("compute_host_id"),
+        "hypervisor_hostname",
+        "hypervisor_type",
+        pl.col("vcpus").alias("host_vcpus"),
+        pl.col("memory_mb").alias("host_memory_mb"),
+        pl.col("local_gb").alias("host_disk_gb"),
+    )
+
+
+def _blazar_reservations(tables: RawTables) -> pl.LazyFrame:
+    """Reservation info keyed by reservation_id."""
+    return tables[Tables.BLAZAR_RES].select(
+        pl.col("id").alias("reservation_id"),
+        "lease_id",
+        pl.col("resource_type").alias("reservation_type"),
+    )
+
+
+def _blazar_flavor_resources(tables: RawTables) -> pl.LazyFrame:
+    """Flavor resources keyed by reservation_id (for flavor:instance only)."""
+    return tables[Tables.BLAZAR_INSTANCE_RES].select(
+        "reservation_id",
+        pl.col("vcpus").alias("flavor_vcpus"),
+        pl.col("memory_mb").alias("flavor_memory_mb"),
+        pl.col("disk_gb").alias("flavor_disk_gb"),
+    )
+
+
+def _blazar_lease_dates(tables: RawTables) -> pl.LazyFrame:
+    """Lease dates keyed by id."""
+    return tables[Tables.BLAZAR_LEASES].select(
+        pl.col("id").alias("lease_id"),
+        "start_date",
+        "end_date",
+        pl.col("created_at").alias("lease_created_at"),
+        pl.col("deleted_at").alias("lease_deleted_at"),
+    )
+
+
+def _effective_resources() -> list[pl.Expr]:
+    """Pick flavor resources for flavor:instance, else host resources."""
+    is_flavor = pl.col("reservation_type") == "flavor:instance"
+    return [
+        pl.when(is_flavor)
+        .then("flavor_vcpus")
+        .otherwise("host_vcpus")
+        .alias("effective_vcpus"),
+        pl.when(is_flavor)
+        .then("flavor_memory_mb")
+        .otherwise("host_memory_mb")
+        .alias("effective_memory_mb"),
+        pl.when(is_flavor)
+        .then("flavor_disk_gb")
+        .otherwise("host_disk_gb")
+        .alias("effective_disk_gb"),
+    ]
+
+
 def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
-    # TODO: also get resources from instance reservations table
+    hosts = _blazar_hosts(tables)
+    reservations = _blazar_reservations(tables)
+    flavor_resources = _blazar_flavor_resources(tables)
+    lease_dates = _blazar_lease_dates(tables)
+
     return (
         tables[Tables.BLAZAR_ALLOC]
-        .join(
-            tables[Tables.BLAZAR_HOSTS].select(
-                [
-                    "id",
-                    "hypervisor_hostname",
-                    "hypervisor_type",
-                    "vcpus",
-                    "memory_mb",
-                    "local_gb",
-                ]
-            ),
-            left_on="compute_host_id",
-            right_on="id",
-            how="left",
-            suffix="_host",
-        )
-        .join(
-            tables[Tables.BLAZAR_RES].select(
-                "id", "lease_id", pl.col("resource_type").alias("reservation_type")
-            ),
-            left_on="reservation_id",
-            right_on="id",
-            how="left",
-            suffix="_res",
-        )
-        .join(
-            tables[Tables.BLAZAR_LEASES].select(
-                ["id", "start_date", "end_date", "created_at", "deleted_at"]
-            ),
-            left_on="lease_id",
-            right_on="id",
-            how="left",
-            suffix="_lease",
-        )
+        .join(hosts, on="compute_host_id", how="left")
+        .join(reservations, on="reservation_id", how="left")
+        .join(flavor_resources, on="reservation_id", how="left")
+        .join(lease_dates, on="lease_id", how="left")
         .with_columns(
-            pl.max_horizontal("start_date", "created_at_lease").alias(
+            pl.max_horizontal("start_date", "lease_created_at").alias(
                 "effective_start"
             ),
-            pl.min_horizontal("end_date", "deleted_at_lease").alias("effective_end"),
+            pl.min_horizontal("end_date", "lease_deleted_at").alias("effective_end"),
+            *_effective_resources(),
         )
         .filter(pl.col("effective_start") <= pl.col("effective_end"))
-        # .filter(pl.col("hypervisor_hostname").is_not_null())
     )
 
 
