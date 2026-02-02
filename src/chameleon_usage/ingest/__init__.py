@@ -27,9 +27,11 @@ novaHostTotal = Adapter(
     },
     resource_cols={
         ResourceTypes.NODE: pl.lit(1),
-        ResourceTypes.VCPUS: pl.col("vcpus"),
-        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
-        ResourceTypes.DISK_GB: pl.col("local_gb"),
+        ResourceTypes.VCPUS: (pl.col("vcpus") * pl.col("cpu_allocation_ratio")),
+        ResourceTypes.VCPUS_PHYSICAL: (pl.col("vcpus")),
+        ResourceTypes.MEMORY_MB: pl.col("memory_mb") * pl.col("ram_allocation_ratio"),
+        ResourceTypes.MEMORY_MB_PHYSICAL: pl.col("memory_mb"),  # TODO handle overcommit
+        ResourceTypes.DISK_GB: pl.col("local_gb"),  # TODO handle overcommit
     },
 )
 blazarHostReservable = Adapter(
@@ -96,6 +98,9 @@ novaInstanceOccupied = Adapter(
     resource_cols={
         ResourceTypes.NODE: pl.lit(1),  # TODO flavor fraction
         ResourceTypes.VCPUS: pl.col("vcpus"),
+        ResourceTypes.VCPUS_PHYSICAL: (
+            pl.col("vcpus")
+        ),  # TODO: should this divide by allocation ratio??
         ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
         ResourceTypes.DISK_GB: pl.col("root_gb"),
     },

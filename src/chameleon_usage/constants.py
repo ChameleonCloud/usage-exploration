@@ -5,8 +5,10 @@ Constants defined in one place for reuse.
 
 class ResourceTypes:
     NODE = "nodes"
-    VCPUS = "vcpus"
-    MEMORY_MB = "memory_mb"
+    VCPUS = "vcpus"  # Includes overcommit
+    VCPUS_PHYSICAL = "vcpus_physical"  # hardware cores, may include SMP
+    MEMORY_MB = "memory_mb"  # includes overcommit
+    MEMORY_MB_PHYSICAL = "memory_mb_physical"
     DISK_GB = "disk_gb"
     GPUS = "gpus"
 

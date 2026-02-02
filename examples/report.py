@@ -5,6 +5,7 @@ from datetime import datetime
 
 import polars as pl
 
+from chameleon_usage.constants import ResourceTypes as RT
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
 from chameleon_usage.pipeline import resample, run_pipeline
@@ -67,8 +68,14 @@ def main():
 
     ptotal1 = time.perf_counter()
 
+    site_resources = {
+        "chi_tacc": [RT.NODE],
+        "chi_uc": [RT.NODE],
+        "kvm_tacc": [RT.VCPUS, RT.VCPUS_PHYSICAL],
+    }
+
     for site_name in SITES:
-        for resource_type in ["nodes", "vcpus", "memory_mb", "disk_gb"]:
+        for resource_type in site_resources[site_name]:
             p1 = time.perf_counter()
             subset = usage.filter(
                 pl.col("site") == site_name,
