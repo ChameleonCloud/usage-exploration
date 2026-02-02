@@ -1,105 +1,71 @@
 """Generate usage reports for all sites."""
 
+import time
 from datetime import datetime
 
 import polars as pl
 
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
-from chameleon_usage.pipeline import (
-    add_site_context,
-    align_timestamps,
-    clip_to_window,
-    compute_derived_metrics,
-    intervals_to_counts,
-    resample,
-)
-from chameleon_usage.schemas import PipelineSpec, UsageModel
+from chameleon_usage.pipeline import resample, run_pipeline
+from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.plots import make_plots
 
+SITES = ["chi_uc", "chi_tacc", "kvm_tacc"]
 TIME_RANGE = (datetime(2020, 1, 1), datetime(2026, 1, 1))
-BUCKET_LENGTH = "30d"
+BUCKET_LENGTH = "7d"
+SPEC = PipelineSpec(
+    group_cols=("metric", "resource", "site", "collector_type"), time_range=TIME_RANGE
+)
+
+
+def process_current(site_name: str) -> pl.LazyFrame:
+    """Process current collector data for one site."""
+    t1 = time.perf_counter()
+    intervals = load_intervals("data/raw_spans", site_name, TIME_RANGE)
+    intervals = intervals.collect().lazy()  # checkpoint after loading data
+    t2 = time.perf_counter()
+    print(f"{site_name}: intervals in {t2 - t1}s")
+    clamped = clamp_hierarchy(intervals)
+    t3 = time.perf_counter()
+    print(f"{site_name}: clamped in {t3 - t2}s")
+    valid = clamped.filter(pl.col("valid")).with_columns(
+        pl.lit(site_name).alias("site"),
+        pl.lit("current").alias("collector_type"),
+    )
+    result = run_pipeline(valid, SPEC)
+    t4 = time.perf_counter()
+    print(f"{site_name}: pipeline in {t4 - t3}s")
+    return result
+
+
+def process_legacy(site_name: str) -> pl.LazyFrame:
+    """Load legacy data for one site (already has derived metrics)."""
+    return get_legacy_usage_counts("data/raw_spans", site_name, "legacy")
 
 
 def main():
-    spec = PipelineSpec(
-        group_cols=("quantity_type", "resource_type", "site", "collector_type"),
-        time_range=TIME_RANGE,
-    )
+    # Process each site independently (avoids cross-join explosion in align_timestamps)
+    results = []
+    for site in SITES:
+        results.append(process_current(site))
+        results.append(process_legacy(site))
 
-    all_intervals = []
-    all_legacy_counts = []
-    SITE_NAMES = ["chi_uc", "chi_tacc", "kvm_tacc"]
+    # Resample after concat so both use same bucket timestamps
+    combined = pl.concat(results)
+    usage = resample(combined, BUCKET_LENGTH, SPEC)
 
-    for site_name in SITE_NAMES:
-        # Stage 1: Load raw intervals (filtered to time range)
-        # TODO this should take PipelineSpec
-        raw_intervals = load_intervals("data/raw_spans", site_name, TIME_RANGE)
-        # Stage 2: Hierarchical clamping (total → reservable → committed → occupied)
-        # clamps where child overlaps parent, filters otherwise
-        clamped_intervals = clamp_hierarchy(raw_intervals)
-        all_intervals.append(
-            clamped_intervals.with_columns(
-                pl.lit(site_name).alias("site"),
-                pl.lit("current").alias("collector_type"),
-            )
-        )
-        # load legacy usage for comparison, format is hours per day
-        legacy_counts = get_legacy_usage_counts(
-            base_path="data/raw_spans", site_name=site_name, collector_type="legacy"
-        )
-        all_legacy_counts.append(legacy_counts)
-
-    clamped = pl.concat(all_intervals).lazy()
-
-    # DEBUG timing
-    cache_clamped = clamped.collect()
-    audit_intervals = cache_clamped.filter(~pl.col("valid"))
-    print(
-        audit_intervals.group_by(
-            "site",
-            "quantity_type",
-            "coerce_action",
-        )
-        .len()
-        .sort(by=["site", "quantity_type", "len"])
-    )
-    valid_intervals = cache_clamped.filter(pl.col("valid"))
-
-    # ALSO DEBUG
-    valid_intervals = valid_intervals.lazy()
-    # Stage 3: Pipeline (sweepline → align → derived → resample)
-    counts = intervals_to_counts(valid_intervals, spec)
-    time_clipped_counts = clip_to_window(counts, spec)
-    aligned = align_timestamps(time_clipped_counts, spec)
-    usage_with_derived = compute_derived_metrics(aligned, spec)
-
-    # legacy counts are already time-aligned and have derived metrics, just resample to match.
-    # TODO: got real messy
-    valid_current_counts = UsageModel.validate(usage_with_derived, lazy=True)
-    all_legacy_counts = pl.concat(all_legacy_counts)
-    valid_legacy_counts = UsageModel.validate(all_legacy_counts, lazy=True)
-    all_counts = pl.concat(
-        [valid_current_counts, valid_legacy_counts],
-        how="diagonal",
-    ).lazy()
-
-    usage = resample(all_counts, BUCKET_LENGTH, spec)
-
-    for site_name in SITE_NAMES:
+    # Generate plots
+    for site_name in SITES:
         for resource_type in ["nodes", "vcpus", "memory_mb", "disk_gb"]:
             subset = usage.filter(
-                pl.col("site").eq(site_name),
-                pl.col("resource_type").eq(resource_type),
-                pl.col("quantity_type").is_in(
-                    ["total", "reservable", "available", "idle", "occupied"],
+                pl.col("site") == site_name,
+                pl.col("resource") == resource_type,
+                pl.col("metric").is_in(
+                    ["total", "reservable", "available", "idle", "occupied"]
                 ),
             )
-            make_plots(
-                subset,
-                output_path="output/plots/",
-                site_name=f"{site_name}_{resource_type}",  # HACK
-            )
+            make_plots(subset, "output/plots/", f"{site_name}_{resource_type}")
 
 
 if __name__ == "__main__":

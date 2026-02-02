@@ -348,3 +348,53 @@ def test_audit_columns_present():
     assert "coerce_action" in result.columns
     assert "original_start" in result.columns
     assert "original_end" in result.columns
+
+
+# --- require_parent parameter ---
+
+
+def test_require_parent_false_passes_through():
+    """Rows not requiring a parent are valid without matching."""
+    target = pl.LazyFrame(
+        {
+            "start": [dt(10), dt(10)],
+            "end": [dt(20), dt(20)],
+            "key": ["A", "orphan_key"],
+            "needs_parent": [True, False],
+        }
+    )
+    validators = pl.LazyFrame(
+        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}
+    )
+    result = apply_temporal_clamp(
+        target, validators, ["key"], require_parent=pl.col("needs_parent")
+    ).collect()
+
+    needs = result.filter(pl.col("key") == "A")
+    assert needs["valid"][0] is True
+    assert needs["coerce_action"][0] == "none"
+
+    exempt = result.filter(pl.col("key") == "orphan_key")
+    assert exempt["valid"][0] is True
+    assert exempt["coerce_action"][0] == "none"
+
+
+def test_require_parent_false_with_null_key():
+    """Null key doesn't matter if parent not required."""
+    target = pl.LazyFrame(
+        {
+            "start": [dt(10)],
+            "end": [dt(20)],
+            "key": [None],
+            "needs_parent": [False],
+        }
+    )
+    validators = pl.LazyFrame(
+        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}
+    )
+    result = apply_temporal_clamp(
+        target, validators, ["key"], require_parent=pl.col("needs_parent")
+    ).collect()
+
+    assert result["valid"][0] is True
+    assert result["coerce_action"][0] == "none"

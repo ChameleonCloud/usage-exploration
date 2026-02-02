@@ -131,6 +131,20 @@ def apply_temporal_clamp(
     )
 
 
+def collect_temporal_clamp(
+    children: pl.LazyFrame,
+    parents: pl.LazyFrame,
+    join_keys: list[str],
+    require_parent: pl.Expr | None = None,
+) -> pl.LazyFrame:
+    """Thin wrapper around temporal clamp that checkpoints."""
+    return (
+        apply_temporal_clamp(children, parents, join_keys, require_parent)
+        .collect()
+        .lazy()
+    )
+
+
 def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     """Apply hierarchical temporal clamping: total → reservable → committed → occupied.
 
@@ -148,10 +162,10 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     committed = intervals.filter(pl.col(S.METRIC).eq(QT.COMMITTED))
     occupied = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED))
 
-    clamped_reservable = apply_temporal_clamp(
+    clamped_reservable = collect_temporal_clamp(
         reservable, parents=total, join_keys=["hypervisor_hostname", S.RESOURCE]
     )
-    clamped_committed = apply_temporal_clamp(
+    clamped_committed = collect_temporal_clamp(
         committed,
         parents=clamped_reservable,
         join_keys=["blazar_host_id", S.RESOURCE],
@@ -164,7 +178,7 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     )
     # Only reserved instances (booking_type="reservation") need allocation parents
     # On-demand instances are valid without clamping
-    clamped_occupied = apply_temporal_clamp(
+    clamped_occupied = collect_temporal_clamp(
         occupied,
         parents=committed_for_occupied,
         join_keys=["blazar_reservation_id", "hypervisor_hostname", S.RESOURCE],
