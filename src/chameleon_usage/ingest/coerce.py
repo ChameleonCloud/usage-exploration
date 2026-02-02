@@ -84,7 +84,9 @@ def apply_temporal_clamp(
 
     # Children with no overlapping parent = orphan
     matched_row_ids = matched.select("_row_id").unique()
-    orphan_rows = matchable.join(matched_row_ids, on="_row_id", how="anti").with_columns(
+    orphan_rows = matchable.join(
+        matched_row_ids, on="_row_id", how="anti"
+    ).with_columns(
         pl.lit(False).alias("valid"),
         pl.lit("orphan").alias("coerce_action"),
     )
@@ -98,7 +100,10 @@ def apply_temporal_clamp(
 
     result = matched.with_columns(
         pl.lit(True).alias("valid"),
-        pl.when(was_clipped).then(pl.lit("clipped")).otherwise(pl.lit("none")).alias("coerce_action"),
+        pl.when(was_clipped)
+        .then(pl.lit("clipped"))
+        .otherwise(pl.lit("none"))
+        .alias("coerce_action"),
         pl.max_horizontal("original_start", "_p_start").alias("start"),
         pl.min_horizontal("original_end", "_p_end").alias("end"),
     ).drop("_p_start", "_p_end")
@@ -134,22 +139,25 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     occupied = intervals.filter(pl.col("quantity_type").eq("occupied"))
 
     clamped_reservable = apply_temporal_clamp(
-        reservable, parents=total, join_keys=["hypervisor_hostname"]
+        reservable, parents=total, join_keys=["hypervisor_hostname", "resource_type"]
     )
     clamped_committed = apply_temporal_clamp(
-        committed, parents=clamped_reservable, join_keys=["blazar_host_id"]
+        committed,
+        parents=clamped_reservable,
+        join_keys=["blazar_host_id", "resource_type"],
     )
     # Deduplicate allocations per (hostname, reservation_id) for instance matching
     # flavor:instance reservations create many allocations per host with same time window
     committed_for_occupied = clamped_committed.unique(
-        subset=["hypervisor_hostname", "blazar_reservation_id"], keep="first"
+        subset=["hypervisor_hostname", "blazar_reservation_id", "resource_type"],
+        keep="first",
     )
     # Only reserved instances (booking_type="reservation") need allocation parents
     # On-demand instances are valid without clamping
     clamped_occupied = apply_temporal_clamp(
         occupied,
         parents=committed_for_occupied,
-        join_keys=["blazar_reservation_id", "hypervisor_hostname"],
+        join_keys=["blazar_reservation_id", "hypervisor_hostname", "resource_type"],
         require_parent=pl.col("booking_type").eq("reservation"),
     )
 

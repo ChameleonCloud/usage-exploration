@@ -23,7 +23,8 @@ BUCKET_LENGTH = "30d"
 
 def main():
     spec = PipelineSpec(
-        group_cols=("quantity_type", "site", "collector_type"), time_range=TIME_RANGE
+        group_cols=("quantity_type", "resource_type", "site", "collector_type"),
+        time_range=TIME_RANGE,
     )
 
     all_intervals = []
@@ -85,22 +86,20 @@ def main():
 
     usage = resample(all_counts, BUCKET_LENGTH, spec)
 
-    ########################################
-    # Legacy usage for validation/comparison
-    ########################################
-
-    print(all_legacy_counts.collect())
-
     for site_name in SITE_NAMES:
-        subset = usage.filter(
-            pl.col("site").eq(site_name),
-            pl.col("quantity_type").is_in(
-                ["total", "reservable", "available", "idle", "occupied"],
-            ),
-        )
-        make_plots(subset, output_path="output/plots/", site_name=site_name)
-
-    # usage_with_context = add_site_context(usage, spec, site_name)
+        for resource_type in ["nodes", "vcpus", "memory_mb", "disk_gb"]:
+            subset = usage.filter(
+                pl.col("site").eq(site_name),
+                pl.col("resource_type").eq(resource_type),
+                pl.col("quantity_type").is_in(
+                    ["total", "reservable", "available", "idle", "occupied"],
+                ),
+            )
+            make_plots(
+                subset,
+                output_path="output/plots/",
+                site_name=f"{site_name}_{resource_type}",  # HACK
+            )
 
 
 if __name__ == "__main__":
