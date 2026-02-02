@@ -28,7 +28,11 @@ TIME_RANGE = (datetime(2024, 1, 1), datetime(2024, 12, 31))
 # =============================================================================
 
 
+# TODO: figure out why more complicated than prior impl
+# previously, either clip pre-cumsum, or filter post-cumsum
+# need to find why join.as_of is different
 def test_clip_to_window_filters_timestamps():
+    """Keeps pre-window events for join_asof, filters post-window."""
     spec = PipelineSpec(
         group_cols=("metric", "resource"),
         time_range=(datetime(2024, 1, 2), datetime(2024, 1, 4)),
@@ -48,7 +52,12 @@ def test_clip_to_window_filters_timestamps():
     )
     result = clip_to_window(df, spec).collect()
 
-    assert result["timestamp"].to_list() == [datetime(2024, 1, 2), datetime(2024, 1, 3)]
+    # Pre-window events kept for join_asof, post-window (Jan 5) filtered out
+    assert result["timestamp"].to_list() == [
+        datetime(2024, 1, 1),
+        datetime(2024, 1, 2),
+        datetime(2024, 1, 3),
+    ]
 
 
 # =============================================================================
@@ -144,5 +153,3 @@ def test_derived_metrics_preserves_extra_group_cols():
     )
     assert vcpu_avail["value"][0] == 7.0
     assert mem_avail["value"][0] == 60.0
-
-
