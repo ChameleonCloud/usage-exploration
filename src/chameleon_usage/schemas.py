@@ -29,7 +29,7 @@ class _OrderedModel(pa.DataFrameModel):
     _value_cols: ClassVar[tuple[str, ...]] = ()
 
     class Config(BaseConfig):
-        strict = True
+        strict = False
         ordered = True
 
     @classmethod
@@ -40,8 +40,11 @@ class _OrderedModel(pa.DataFrameModel):
 
     @classmethod
     def validate(cls, check_obj, *args, **kwargs):
-        """Reorder columns to match schema, then validate."""
-        check_obj = check_obj.select(*cls.to_schema().columns.keys())
+        """Reorder schema columns to front, preserve extra columns, then validate."""
+        schema_cols = list(cls.to_schema().columns.keys())
+        all_cols = check_obj.collect_schema().names()
+        extra_cols = [c for c in all_cols if c not in schema_cols]
+        check_obj = check_obj.select(*schema_cols, *extra_cols)
         return super().validate(check_obj, *args, **kwargs)
 
 
