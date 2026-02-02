@@ -33,9 +33,7 @@ def load_raw_tables(base_path: str, site_name: str) -> dict[str, pl.LazyFrame]:
         Tables.NOVA_REQUEST_SPECS: raw.NovaRequestSpecRaw.validate(
             pl.scan_parquet(f"{path}/nova_api.request_specs.parquet")
         ),
-        Tables.NOVA_ACTIONS: pl.scan_parquet(
-            f"{path}/nova.instance_actions.parquet"
-        ),
+        Tables.NOVA_ACTIONS: pl.scan_parquet(f"{path}/nova.instance_actions.parquet"),
         Tables.NOVA_ACTION_EVENTS: pl.scan_parquet(
             f"{path}/nova.instance_actions_events.parquet"
         ),

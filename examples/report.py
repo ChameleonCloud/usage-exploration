@@ -5,6 +5,7 @@ from datetime import datetime
 import polars as pl
 
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
+from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
 from chameleon_usage.pipeline import (
     add_site_context,
     align_timestamps,
@@ -13,7 +14,7 @@ from chameleon_usage.pipeline import (
     intervals_to_counts,
     resample,
 )
-from chameleon_usage.schemas import PipelineSpec
+from chameleon_usage.schemas import PipelineSpec, UsageSchema
 from chameleon_usage.viz.plots import make_plots
 
 TIME_RANGE = (datetime(2020, 1, 1), datetime(2026, 1, 1))
@@ -26,6 +27,7 @@ def main():
     )
 
     all_intervals = []
+    all_legacy_counts = []
     SITE_NAMES = ["chi_uc", "chi_tacc", "kvm_tacc"]
 
     for site_name in SITE_NAMES:
@@ -41,6 +43,11 @@ def main():
                 pl.lit("current").alias("collector_type"),
             )
         )
+        # load legacy usage for comparison, format is hours per day
+        legacy_counts = get_legacy_usage_counts(
+            base_path="data/raw_spans", site_name=site_name, collector_type="legacy"
+        )
+        all_legacy_counts.append(legacy_counts)
 
     clamped = pl.concat(all_intervals)
 
@@ -64,8 +71,25 @@ def main():
     counts = intervals_to_counts(valid_intervals, spec)
     time_clipped_counts = clip_to_window(counts, spec)
     aligned = align_timestamps(time_clipped_counts, spec)
-    derived = compute_derived_metrics(aligned, spec)
-    usage = resample(derived, BUCKET_LENGTH, spec)
+    usage_with_derived = compute_derived_metrics(aligned, spec)
+
+    # legacy counts are already time-aligned and have derived metrics, just resample to match.
+    # TODO: got real messy
+    valid_current_counts = UsageSchema.validate(usage_with_derived, lazy=True)
+    all_legacy_counts = pl.concat(all_legacy_counts)
+    valid_legacy_counts = UsageSchema.validate(all_legacy_counts, lazy=True)
+    all_counts = pl.concat(
+        [valid_current_counts, valid_legacy_counts],
+        how="diagonal",
+    )
+
+    usage = resample(all_counts, BUCKET_LENGTH, spec)
+
+    ########################################
+    # Legacy usage for validation/comparison
+    ########################################
+
+    print(all_legacy_counts.collect())
 
     for site_name in SITE_NAMES:
         subset = usage.filter(
