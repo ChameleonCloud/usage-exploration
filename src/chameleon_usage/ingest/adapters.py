@@ -6,7 +6,6 @@ from typing import Callable
 import polars as pl
 
 from chameleon_usage.constants import Tables
-from chameleon_usage.schemas import IntervalSchema
 
 RawTables = dict[str, pl.LazyFrame]
 
@@ -17,6 +16,7 @@ class Adapter:
     quantity_type: str
     source: Callable[[RawTables], pl.LazyFrame]
     context_cols: dict[str, str] = field(default_factory=dict)
+    resource_cols: list[str] = field(default_factory=list)
     start_col: str = "created_at"
     end_col: str = "deleted_at"
 
@@ -34,11 +34,36 @@ class AdapterRegistry:
             pl.col(adapter.end_col).alias("end"),
             pl.lit(adapter.quantity_type).alias("quantity_type"),
             *[pl.col(src).alias(dst) for src, dst in adapter.context_cols.items()],
+            *[pl.col(res_col).cast(pl.Float64) for res_col in adapter.resource_cols],
+        )
+
+    def _inflate_resources(
+        self,
+        df: pl.LazyFrame,
+        resource_cols: list[str],
+    ) -> pl.LazyFrame:
+        """Explode each interval into N rows, one per resource type."""
+        all_cols = df.collect_schema().names()
+        index_cols = [c for c in all_cols if c not in resource_cols]
+        return df.unpivot(
+            index=index_cols,
+            on=resource_cols,
+            variable_name="resource_type",
+            value_name="resource_value",
         )
 
     def to_intervals(self, tables: RawTables) -> pl.LazyFrame:
-        intervals = [self._convert(a.source(tables), a) for a in self.adapters]
-        return IntervalSchema.validate(pl.concat(intervals, how="diagonal"))
+        intervals = []
+        # run each registered adapter, normalize, and then generate long-format
+        # row per resource type, resource value
+        for adapter in self.adapters:
+            normalized = self._convert(adapter.source(tables), adapter)
+            row_per_resource = self._inflate_resources(
+                normalized, adapter.resource_cols
+            )
+            intervals.append(row_per_resource)
+
+        return pl.concat(intervals, how="diagonal")
 
 
 def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
