@@ -42,9 +42,12 @@ def dt(day):
     return datetime(2024, 1, day)
 
 
+SCHEMA = {"start": pl.Datetime, "end": pl.Datetime, "key": pl.Utf8}
+
+
 def clamp(target_rows, validator_rows, join_keys=["key"]):
-    target = pl.LazyFrame(target_rows)
-    validators = pl.LazyFrame(validator_rows)
+    target = pl.LazyFrame(target_rows, schema=SCHEMA)
+    validators = pl.LazyFrame(validator_rows, schema=SCHEMA)
     return apply_temporal_clamp(target, validators, join_keys).collect()
 
 
@@ -361,11 +364,10 @@ def test_require_parent_false_passes_through():
             "end": [dt(20), dt(20)],
             "key": ["A", "orphan_key"],
             "needs_parent": [True, False],
-        }
+        },
+        schema={**SCHEMA, "needs_parent": pl.Boolean},
     )
-    validators = pl.LazyFrame(
-        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}
-    )
+    validators = pl.LazyFrame({"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA)
     result = apply_temporal_clamp(
         target, validators, ["key"], require_parent=pl.col("needs_parent")
     ).collect()
@@ -387,11 +389,10 @@ def test_require_parent_false_with_null_key():
             "end": [dt(20)],
             "key": [None],
             "needs_parent": [False],
-        }
+        },
+        schema={**SCHEMA, "needs_parent": pl.Boolean},
     )
-    validators = pl.LazyFrame(
-        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}
-    )
+    validators = pl.LazyFrame({"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA)
     result = apply_temporal_clamp(
         target, validators, ["key"], require_parent=pl.col("needs_parent")
     ).collect()
