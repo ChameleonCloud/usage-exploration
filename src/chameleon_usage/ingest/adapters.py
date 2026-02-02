@@ -54,14 +54,17 @@ class AdapterRegistry:
 
     def to_intervals(self, tables: RawTables) -> pl.LazyFrame:
         intervals = []
-        # run each registered adapter, normalize, and then generate long-format
-        # row per resource type, resource value
         for adapter in self.adapters:
             normalized = self._convert(adapter.source(tables), adapter)
-            row_per_resource = self._inflate_resources(
-                normalized, adapter.resource_cols
-            )
-            intervals.append(row_per_resource)
+            # HACK: handle case where no resource columns are specified, "unpivot" will explode.
+            if adapter.resource_cols:
+                inflated = self._inflate_resources(normalized, adapter.resource_cols)
+            else:
+                inflated = normalized.with_columns(
+                    pl.lit("nodes").alias("resource_type"),
+                    pl.lit(1.0).alias("resource_value"),
+                )
+            intervals.append(inflated)
 
         return pl.concat(intervals, how="diagonal")
 
