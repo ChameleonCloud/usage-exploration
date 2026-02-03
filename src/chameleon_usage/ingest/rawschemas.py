@@ -5,9 +5,15 @@ Names necessary columns, minimal type coercion only.
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 
 
-class BlazarHostRaw(pa.DataFrameModel):
+class BaseRaw(pa.DataFrameModel):
+    class Config(BaseConfig):
+        strict = "filter"
+
+
+class BlazarHostRaw(BaseRaw):
     id: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
@@ -18,7 +24,7 @@ class BlazarHostRaw(pa.DataFrameModel):
     local_gb: int = pa.Field(coerce=True)  # copied from nova computenode on create
 
 
-class BlazarLeaseRaw(pa.DataFrameModel):
+class BlazarLeaseRaw(BaseRaw):
     id: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
@@ -26,7 +32,7 @@ class BlazarLeaseRaw(pa.DataFrameModel):
     end_date: pl.Datetime = pa.Field(nullable=True, coerce=True)
 
 
-class BlazarReservationRaw(pa.DataFrameModel):
+class BlazarReservationRaw(BaseRaw):
     id: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
@@ -34,7 +40,7 @@ class BlazarReservationRaw(pa.DataFrameModel):
     resource_type: str
 
 
-class BlazarAllocationRaw(pa.DataFrameModel):
+class BlazarAllocationRaw(BaseRaw):
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     id: str = pa.Field(unique=True)
@@ -42,14 +48,14 @@ class BlazarAllocationRaw(pa.DataFrameModel):
     reservation_id: str = pa.Field(unique=True)
 
 
-class BlazarInstanceReservationRaw(pa.DataFrameModel):
+class BlazarInstanceReservationRaw(BaseRaw):
     reservation_id: str = pa.Field()
     vcpus: int = pa.Field(coerce=True)
     memory_mb: int = pa.Field(coerce=True)
     disk_gb: int = pa.Field(coerce=True)
 
 
-class NovaHostRaw(pa.DataFrameModel):
+class NovaHostRaw(BaseRaw):
     id: str = pa.Field(unique=True, coerce=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
@@ -63,7 +69,7 @@ class NovaHostRaw(pa.DataFrameModel):
     disk_allocation_ratio: float = pa.Field(coerce=True)  # float32 -> float64
 
 
-class NovaServiceRaw(pa.DataFrameModel):
+class NovaServiceRaw(BaseRaw):
     id: int = pa.Field(coerce=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
@@ -71,7 +77,7 @@ class NovaServiceRaw(pa.DataFrameModel):
     binary: str = pa.Field()
 
 
-class NovaInstanceRaw(pa.DataFrameModel):
+class NovaInstanceRaw(BaseRaw):
     id: str = pa.Field(unique=True, coerce=True)
     uuid: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
@@ -85,12 +91,12 @@ class NovaInstanceRaw(pa.DataFrameModel):
     root_gb: int = pa.Field(coerce=True)
 
 
-class NovaRequestSpecRaw(pa.DataFrameModel):
+class NovaRequestSpecRaw(BaseRaw):
     instance_uuid: str = pa.Field()
     spec: str = pa.Field()
 
 
-class NodeUsageReportCache(pa.DataFrameModel):
+class NodeUsageReportCache(BaseRaw):
     date: pl.Datetime = pa.Field(coerce=True)
     node_type: str = pa.Field()
     maint_hours: float = pa.Field()
@@ -100,7 +106,7 @@ class NodeUsageReportCache(pa.DataFrameModel):
     total_hours: float = pa.Field(coerce=True)
 
 
-class NodeCountCache(pa.DataFrameModel):
+class NodeCountCache(BaseRaw):
     date: pl.Date = pa.Field(coerce=True)
     node_type: str = pa.Field()
     cnt: int = pa.Field(coerce=True)
