@@ -91,6 +91,30 @@ class NovaInstanceRaw(BaseRaw):
     root_gb: int = pa.Field(coerce=True)
 
 
+class NovaInstanceActionsRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    id: int = pa.Field(coerce=True)
+    action: str
+    instance_uuid: str
+    start_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    # TODO: use success/fail and message to analyze launch failures
+
+
+class NovaInstanceActionsEventsRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    id: int = pa.Field(coerce=True)
+    event: str
+    action_id: int = pa.Field(coerce=True)
+    start_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    result: str
+    host: str
+    # TODO: use success/fail and message to analyze launch failures
+
+
 class NovaRequestSpecRaw(BaseRaw):
     instance_uuid: str = pa.Field()
     spec: str = pa.Field()

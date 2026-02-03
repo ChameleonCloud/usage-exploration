@@ -6,8 +6,8 @@ from typing import Callable
 import polars as pl
 
 from chameleon_usage.constants import SchemaCols as S
-from chameleon_usage.constants import Tables
 from chameleon_usage.schemas import IntervalModel
+from chameleon_usage.sources import Tables
 
 RawTables = dict[str, pl.LazyFrame]
 

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.constants import ResourceTypes, Tables
+from chameleon_usage.constants import ResourceTypes
 from chameleon_usage.ingest.adapters import (
     Adapter,
     AdapterRegistry,
@@ -13,6 +13,7 @@ from chameleon_usage.ingest.adapters import (
 )
 from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.ingest.loader import load_raw_tables
+from chameleon_usage.sources import Tables
 
 ##################
 # Default registry

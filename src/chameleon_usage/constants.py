@@ -12,19 +12,6 @@ class ResourceTypes:
     GPUS = "gpus"
 
 
-class Tables:
-    NOVA_HOSTS = "nova_hosts"
-    NOVA_INSTANCES = "nova_instances"
-    NOVA_REQUEST_SPECS = "nova_request_specs"
-    NOVA_ACTIONS = "nova_actions"
-    NOVA_ACTION_EVENTS = "nova_action_events"
-    BLAZAR_HOSTS = "blazar_hosts"
-    BLAZAR_ALLOC = "blazar_alloc"
-    BLAZAR_RES = "blazar_res"
-    BLAZAR_INSTANCE_RES = "blazar_instance_res"
-    BLAZAR_LEASES = "blazar_leases"
-
-
 class QuantityTypes:
     TOTAL = "total"
     RESERVABLE = "reservable"

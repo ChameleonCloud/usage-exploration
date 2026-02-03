@@ -2,8 +2,17 @@
 
 import polars as pl
 
-from chameleon_usage.constants import Tables
-from chameleon_usage.ingest import rawschemas as raw
+from chameleon_usage.sources import SOURCE_REGISTRY, SourceSpec
+
+
+def _load_parquet(path: str, spec: SourceSpec, validate: bool = False):
+    parquet_path = f"{path}/{spec.db_schema}.{spec.db_table}.parquet"
+    df = pl.scan_parquet(parquet_path)
+
+    if validate:
+        df = spec.model.validate(df)
+
+    return df
 
 
 def load_raw_tables(base_path: str, site_name: str) -> dict[str, pl.LazyFrame]:
@@ -12,32 +21,6 @@ def load_raw_tables(base_path: str, site_name: str) -> dict[str, pl.LazyFrame]:
 
     # Load raw tables with schema validation
     return {
-        Tables.NOVA_HOSTS: raw.NovaHostRaw.validate(
-            pl.scan_parquet(f"{path}/nova.compute_nodes.parquet")
-        ),
-        Tables.BLAZAR_HOSTS: raw.BlazarHostRaw.validate(
-            pl.scan_parquet(f"{path}/blazar.computehosts.parquet")
-        ),
-        Tables.BLAZAR_ALLOC: raw.BlazarAllocationRaw.validate(
-            pl.scan_parquet(f"{path}/blazar.computehost_allocations.parquet")
-        ),
-        Tables.BLAZAR_RES: raw.BlazarReservationRaw.validate(
-            pl.scan_parquet(f"{path}/blazar.reservations.parquet")
-        ),
-        Tables.BLAZAR_LEASES: raw.BlazarLeaseRaw.validate(
-            pl.scan_parquet(f"{path}/blazar.leases.parquet")
-        ),
-        Tables.BLAZAR_INSTANCE_RES: raw.BlazarInstanceReservationRaw.validate(
-            pl.scan_parquet(f"{path}/blazar.instance_reservations.parquet")
-        ),
-        Tables.NOVA_INSTANCES: raw.NovaInstanceRaw.validate(
-            pl.scan_parquet(f"{path}/nova.instances.parquet")
-        ),
-        Tables.NOVA_REQUEST_SPECS: raw.NovaRequestSpecRaw.validate(
-            pl.scan_parquet(f"{path}/nova_api.request_specs.parquet")
-        ),
-        Tables.NOVA_ACTIONS: pl.scan_parquet(f"{path}/nova.instance_actions.parquet"),
-        Tables.NOVA_ACTION_EVENTS: pl.scan_parquet(
-            f"{path}/nova.instance_actions_events.parquet"
-        ),
+        key: _load_parquet(path=path, spec=spec, validate=True)
+        for key, spec in SOURCE_REGISTRY.items()
     }
