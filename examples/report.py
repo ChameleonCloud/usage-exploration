@@ -5,10 +5,18 @@ from pathlib import Path
 
 import polars as pl
 
+from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.constants import ResourceTypes as RT
+from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
-from chameleon_usage.pipeline import resample, run_pipeline
+from chameleon_usage.pipeline import (
+    align_timestamps,
+    clip_to_window,
+    compute_derived_metrics,
+    intervals_to_counts,
+    resample,
+)
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.matplotlib_plots import (
     plot_resource_utilization,
@@ -46,6 +54,8 @@ PLOT_METRICS = [
     "available_ondemand",
 ]
 
+TOTAL_OVERRIDE_SITES = {"chi_tacc", "chi_uc"}
+
 
 def process_current(site_name: str) -> pl.LazyFrame:
     intervals = (
@@ -55,12 +65,48 @@ def process_current(site_name: str) -> pl.LazyFrame:
     valid = clamped.filter(pl.col("valid")).with_columns(
         pl.lit(site_name).alias("site")
     )
-    return run_pipeline(valid, SPEC).collect().lazy()
+    counts = intervals_to_counts(valid, SPEC)
+    counts = clip_to_window(counts, SPEC)
+    aligned = align_timestamps(counts, SPEC)
+    if site_name in TOTAL_OVERRIDE_SITES:
+        aligned = override_total_with_reservable(aligned)
+    derived = compute_derived_metrics(aligned, SPEC)
+    return derived.collect().lazy()
 
 
 def process_legacy(site_name: str) -> pl.LazyFrame:
     return (
         get_legacy_usage_counts("data/raw_spans", site_name, "legacy").collect().lazy()
+    )
+
+
+def override_total_with_reservable(timeline: pl.LazyFrame) -> pl.LazyFrame:
+    reservable = timeline.filter(
+        pl.col(S.METRIC) == QT.RESERVABLE,
+    ).select(
+        S.TIMESTAMP,
+        "site",
+        S.RESOURCE,
+        "collector_type",
+        pl.col(S.VALUE).alias("_reservable_value"),
+    )
+
+    return (
+        timeline.join(
+            reservable,
+            on=[S.TIMESTAMP, "site", S.RESOURCE, "collector_type"],
+            how="left",
+        )
+        .with_columns(
+            pl.when(
+                pl.col(S.METRIC).eq(QT.TOTAL)
+                & pl.col("_reservable_value").is_not_null()
+            )
+            .then(pl.col("_reservable_value"))
+            .otherwise(pl.col(S.VALUE))
+            .alias(S.VALUE)
+        )
+        .drop("_reservable_value")
     )
 
 
