@@ -25,6 +25,10 @@ class Tables:
     BLAZAR_RES = "blazar_res"
     BLAZAR_INSTANCE_RES = "blazar_instance_res"
     BLAZAR_LEASES = "blazar_leases"
+    BLAZAR_DEVICE_ALLOCATIONS = "blazar_device_allocations"
+    BLAZAR_DEVICE_EXTRA_CAPABILITIES = "blazar_device_extra_capabilities"
+    BLAZAR_DEVICE_RESERVATIONS = "blazar_device_reservations"
+    BLAZAR_DEVICES = "blazar_devices"
 
 
 SOURCE_REGISTRY = {
@@ -48,4 +52,14 @@ SOURCE_REGISTRY = {
         "blazar", "instance_reservations", raw.BlazarInstanceReservationRaw
     ),
     Tables.BLAZAR_LEASES: SourceSpec("blazar", "leases", raw.BlazarLeaseRaw),
+    Tables.BLAZAR_DEVICE_ALLOCATIONS: SourceSpec(
+        "blazar", "device_allocations", raw.BlazarDeviceAllocationRaw
+    ),
+    Tables.BLAZAR_DEVICE_EXTRA_CAPABILITIES: SourceSpec(
+        "blazar", "device_extra_capabilities", raw.BlazarDeviceExtraCapabilityRaw
+    ),
+    Tables.BLAZAR_DEVICE_RESERVATIONS: SourceSpec(
+        "blazar", "device_reservations", raw.BlazarDeviceReservationRaw
+    ),
+    Tables.BLAZAR_DEVICES: SourceSpec("blazar", "devices", raw.BlazarDeviceRaw),
 }

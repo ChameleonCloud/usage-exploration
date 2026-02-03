@@ -134,3 +134,96 @@ class NodeCountCache(BaseRaw):
     date: pl.Date = pa.Field(coerce=True)
     node_type: str = pa.Field()
     cnt: int = pa.Field(coerce=True)
+
+
+############
+# CHI@Edge #
+############
+class ZunComputeNodeRaw(BaseRaw):
+    """Not super useful for chi@edge, just one for whole k3s cluster."""
+
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    uuid: str
+    hostname: str
+
+
+class ZunContainerRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    id: int = pa.Field(coerce=True)
+    uuid: str
+    name: str
+    container_id: str
+    hostname: str
+    labels: str
+    status_reason: str
+    host: str
+    status_detail: str
+    started_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+
+
+class ZunContainerActionsRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    id: int = pa.Field(coerce=True)
+    action: str
+    container_uuid: str
+    start_time: pl.Datetime = pa.Field(coerce=True)
+    finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+
+
+class ZunContainerActionsEventsRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    id: int = pa.Field(coerce=True)
+    event: str
+    action_id: int = pa.Field(coerce=True)
+    start_time: pl.Datetime = pa.Field(coerce=True)
+    finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    result: str
+
+
+class BlazarDeviceAllocationRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    deleted: str
+    id: str
+    device_id: str
+    reservation_id: str
+
+
+class BlazarDeviceExtraCapabilityRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True)
+    id: str
+    device_id: str
+    capability_id: str
+    capability_value: str
+    deleted: str
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+
+
+class BlazarDeviceReservationRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True)
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    deleted: str
+    id: str
+    reservation_id: str
+    count_range: str
+    resource_properties: str
+    before_end: str
+
+
+class BlazarDeviceRaw(BaseRaw):
+    created_at: pl.Datetime = pa.Field(coerce=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True)
+    id: str
+    name: str
+    device_type: str
+    device_driver: str
+    reservable: int = pa.Field(coerce=True)
+    deleted: str
+    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
