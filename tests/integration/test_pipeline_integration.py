@@ -39,7 +39,7 @@ def test_clamp_hierarchy_to_pipeline():
                 datetime(2024, 1, 3),
                 datetime(2024, 1, 3),
             ],
-            "metric": [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.OCCUPIED],
+            "metric": [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.OCCUPIED_RESERVATION],
             "resource": [RT.NODE] * 4,
             "value": [1.0] * 4,
             "hypervisor_hostname": ["host1"] * 4,
@@ -77,4 +77,4 @@ def test_run_pipeline_produces_derived_metrics():
     )
     result = run_pipeline(df, spec).collect()
 
-    assert QT.AVAILABLE in result["metric"].to_list()
+    assert QT.AVAILABLE_RESERVABLE in result["metric"].to_list()

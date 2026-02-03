@@ -129,7 +129,7 @@ def test_derived_metrics_computes_available():
     )
     result = compute_derived_metrics(df, spec).collect()
 
-    available = result.filter(pl.col("metric") == QT.AVAILABLE)
+    available = result.filter(pl.col("metric") == QT.AVAILABLE_RESERVABLE)
     assert available["value"][0] == 7.0
 
 
@@ -146,10 +146,10 @@ def test_derived_metrics_preserves_extra_group_cols():
     result = compute_derived_metrics(df, spec).collect()
 
     vcpu_avail = result.filter(
-        (pl.col("metric") == QT.AVAILABLE) & (pl.col("resource") == "vcpu")
+        (pl.col("metric") == QT.AVAILABLE_RESERVABLE) & (pl.col("resource") == "vcpu")
     )
     mem_avail = result.filter(
-        (pl.col("metric") == QT.AVAILABLE) & (pl.col("resource") == "memory")
+        (pl.col("metric") == QT.AVAILABLE_RESERVABLE) & (pl.col("resource") == "memory")
     )
     assert vcpu_avail["value"][0] == 7.0
     assert mem_avail["value"][0] == 60.0
