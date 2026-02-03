@@ -76,6 +76,8 @@ class NovaInstanceRaw(pa.DataFrameModel):
     uuid: str = pa.Field(unique=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
+    launched_at: pl.Datetime = pa.Field(coerce=True)
+    terminated_at: pl.Datetime = pa.Field(coerce=True)
     host: str = pa.Field()
     node: str = pa.Field()
     vcpus: int = pa.Field(coerce=True)

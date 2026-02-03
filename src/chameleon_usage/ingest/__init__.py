@@ -92,6 +92,7 @@ _occupied_context = {
 _occupied_resources = {
     ResourceTypes.NODE: pl.lit(1),
     ResourceTypes.VCPUS: pl.col("vcpus"),
+    ResourceTypes.VCPUS_OVERCOMMIT: pl.col("vcpus"),  # flavor vcpus count against overcommit pool
     ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
     ResourceTypes.DISK_GB: pl.col("root_gb"),
 }

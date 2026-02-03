@@ -157,7 +157,11 @@ def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
     )
 
 
-END_EVENTS = ["compute_terminate_instance", "compute_shelve_offload_instance"]
+END_EVENTS = [
+    "compute_terminate_instance",
+    "compute_shelve_offload_instance",
+    "compute_shelve_instance",
+]
 RESUME_EVENTS = ["compute_unshelve_instance"]
 
 # Conditions for filtering events
@@ -209,12 +213,17 @@ def _terminated_at(tables: RawTables) -> pl.LazyFrame:
         pl.col("start_time")
         .filter(is_end_event & is_after_last_resume)
         .min()
-        .alias("terminated_at")
+        .alias("event_terminated_at")  # renamed to avoid collision with instances.terminated_at
     )
 
 
 def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
-    """Load instances with blazar reservation_id and recovered host from events."""
+    """Load instances with blazar reservation_id and recovered host from events.
+
+    Uses launched_at as start (instances that never launched are filtered out).
+    End time is min(terminated_at, deleted_at, event_terminated_at) to handle
+    both KVM (accurate table values) and baremetal (needs event-derived).
+    """
     instances = tables[Tables.NOVA_INSTANCES]
 
     # Extract reservation_id: scheduler_hints
@@ -236,14 +245,13 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
 
     # Recover last known host and termination time from events
     last_host = _last_host(tables)
-    terminated_at = _terminated_at(tables)
+    event_terminated = _terminated_at(tables)
 
     return (
-        instances.join(
-            request_specs, left_on="uuid", right_on="instance_uuid", how="left"
-        )
+        instances.filter(pl.col("launched_at").is_not_null())  # skip never-launched
+        .join(request_specs, left_on="uuid", right_on="instance_uuid", how="left")
         .join(last_host, left_on="uuid", right_on="instance_uuid", how="left")
-        .join(terminated_at, left_on="uuid", right_on="instance_uuid", how="left")
+        .join(event_terminated, left_on="uuid", right_on="instance_uuid", how="left")
         .with_columns(
             pl.coalesce("res_hint", "res_flavor").alias("blazar_reservation_id"),
             pl.when(pl.col("res_hint").is_null() & pl.col("res_flavor").is_null())
@@ -251,7 +259,12 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             .otherwise(pl.lit("reservation"))
             .alias("booking_type"),
             pl.coalesce("node", "last_host").alias("node"),
-            pl.min_horizontal("deleted_at", "terminated_at").alias("deleted_at"),
+            # Use launched_at as start time (rename to created_at for adapter)
+            pl.col("launched_at").alias("created_at"),
+            # End = min of table values and event-derived (handles both KVM and baremetal)
+            pl.min_horizontal("terminated_at", "deleted_at", "event_terminated_at").alias(
+                "deleted_at"
+            ),
         )
-        .drop("res_hint", "res_flavor", "last_host", "terminated_at")
+        .drop("res_hint", "res_flavor", "last_host", "terminated_at", "event_terminated_at", "launched_at")
     )

@@ -41,10 +41,10 @@ QTY_COLORS = {
 QTY_ORDER = [
     QT.TOTAL,
     QT.RESERVABLE,
-    QT.ONDEMAND_CAPACITY,
-    QT.COMMITTED,
+    # QT.ONDEMAND_CAPACITY,
     QT.AVAILABLE_RESERVABLE,
     QT.AVAILABLE_ONDEMAND,
+    # QT.COMMITTED,
     QT.IDLE,
     QT.OCCUPIED_RESERVATION,
     QT.OCCUPIED_ONDEMAND,
@@ -76,7 +76,7 @@ def usage_stack_plot(
             QT.AVAILABLE_ONDEMAND,
         ]
     if line_metrics is None:
-        line_metrics = [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.ONDEMAND_CAPACITY]
+        line_metrics = [QT.TOTAL, QT.RESERVABLE]
 
     base = alt.Chart(data)
     x_time = alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year"))
