@@ -63,8 +63,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def process_site(config: SiteConfig, spec: PipelineSpec, resample: str) -> pl.LazyFrame:
-    intervals = load_intervals(config.raw_parquet, spec.time_range)
-    clamped = clamp_hierarchy(intervals)
+    intervals = (
+        load_intervals(config.raw_parquet, spec.time_range).collect().lazy()
+    )  # checkpoint
+    clamped = clamp_hierarchy(intervals).collect().lazy()  # checkpoint
+
     valid = clamped.filter(pl.col("valid"))
 
     cols = set(valid.collect_schema().names())

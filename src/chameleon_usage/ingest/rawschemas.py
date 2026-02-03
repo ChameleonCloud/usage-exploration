@@ -199,7 +199,7 @@ class BlazarDeviceExtraCapabilityRaw(BaseRaw):
     updated_at: pl.Datetime = pa.Field(coerce=True)
     id: str
     device_id: str
-    capability_id: str
+    # capability_id: str
     capability_value: str
     deleted: str
     deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)

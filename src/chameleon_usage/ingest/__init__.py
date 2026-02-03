@@ -140,7 +140,9 @@ def load_intervals(
         time_range: Optional (start, end) to filter intervals that overlap this window
     """
     tables = load_raw_tables(parquet_path)
-    intervals = REGISTRY.to_intervals(tables)
+    intervals = REGISTRY.to_intervals(tables).with_columns(
+        pl.lit("current").alias("collector_type")
+    )
 
     if time_range is not None:
         range_start, range_end = time_range
