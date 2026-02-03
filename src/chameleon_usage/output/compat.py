@@ -29,7 +29,13 @@ def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
     wide = (
         df.filter(
             pl.col("metric").is_in(
-                [QT.TOTAL, QT.RESERVABLE, QT.AVAILABLE, QT.IDLE, QT.OCCUPIED]
+                [
+                    QT.TOTAL,
+                    QT.RESERVABLE,
+                    QT.AVAILABLE_RESERVABLE,
+                    QT.IDLE,
+                    QT.OCCUPIED_RESERVATION,
+                ]
             )
         )
         .group_by(["timestamp", "site", "metric"])
@@ -45,8 +51,10 @@ def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
         ((pl.col(QT.TOTAL) - pl.col(QT.RESERVABLE)) * HOURS_PER_DAY).alias(
             CanonicalStates.MAINTENANCE
         ),
-        (pl.col(QT.AVAILABLE) * HOURS_PER_DAY).alias(CanonicalStates.AVAILABLE),
+        (pl.col(QT.AVAILABLE_RESERVABLE) * HOURS_PER_DAY).alias(
+            CanonicalStates.AVAILABLE
+        ),
         (pl.col(QT.IDLE) * HOURS_PER_DAY).alias(CanonicalStates.IDLE_RESERVATION),
-        (pl.col(QT.OCCUPIED) * HOURS_PER_DAY).alias(CanonicalStates.ACTIVE),
+        (pl.col(QT.OCCUPIED_RESERVATION) * HOURS_PER_DAY).alias(CanonicalStates.ACTIVE),
         (pl.col(QT.TOTAL) * HOURS_PER_DAY).alias("total_hours"),
     ).lazy()

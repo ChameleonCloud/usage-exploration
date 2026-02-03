@@ -57,7 +57,7 @@ def main():
         results.append(process_legacy(site))
 
     # Resample after concat so both use same bucket timestamps
-    combined = pl.concat(results)
+    combined = pl.concat(results).lazy()
 
     r1 = time.perf_counter()
     usage = resample(combined, BUCKET_LENGTH, SPEC)
