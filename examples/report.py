@@ -21,7 +21,7 @@ SPEC = PipelineSpec(
 SITE_RESOURCES = {
     "chi_tacc": [RT.NODE],
     "chi_uc": [RT.NODE],
-    "kvm_tacc": [RT.VCPUS],
+    "kvm_tacc": [RT.NODE, RT.VCPUS],
 }
 SITES = list(SITE_RESOURCES.keys())
 

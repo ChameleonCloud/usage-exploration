@@ -53,8 +53,10 @@ blazarHostReservable = Adapter(
 )
 
 ## Conditions
+# TODO: fix magic strings.
 is_host_reservation = pl.col("reservation_type").eq("physical:host")
 is_baremetal = pl.col("hypervisor_type").eq("ironic")
+is_kvm = pl.col("hypervisor_type").eq("QEMU")
 use_host_resources = is_host_reservation | is_baremetal
 
 
@@ -63,6 +65,16 @@ def pick_resource(host_col: str, other_col: str) -> pl.Expr:
     host_expr = pl.col(host_col)
     other_expr = pl.col(other_col)
     return pl.when(use_host_resources).then(host_expr).otherwise(other_expr)
+
+
+def pick_fraction(
+    scale_when: pl.Expr, numerator_col: str, denominator_col: str
+) -> pl.Expr:
+    return (
+        pl.when(scale_when)
+        .then(pl.col(numerator_col) / pl.col(denominator_col))
+        .otherwise(pl.lit(1))
+    )
 
 
 blazarAllocCommitted = Adapter(
@@ -79,7 +91,9 @@ blazarAllocCommitted = Adapter(
     start_col="effective_start",
     end_col="effective_end",
     resource_cols={
-        ResourceTypes.NODE: pl.lit(1),  # TODO flavor fraction
+        ResourceTypes.NODE: pick_fraction(
+            ~is_host_reservation, "effective_vcpus", "host_vcpus"
+        ),
         ResourceTypes.VCPUS: pl.col("effective_vcpus"),
         ResourceTypes.MEMORY_MB: pl.col("effective_memory_mb"),
         ResourceTypes.DISK_GB: pl.col("effective_disk_gb"),
@@ -91,7 +105,7 @@ _occupied_context = {
     "node": "hypervisor_hostname",
 }
 _occupied_resources = {
-    ResourceTypes.NODE: pl.lit(1),
+    ResourceTypes.NODE: pick_fraction(is_kvm, "vcpus", "host_vcpus"),
     ResourceTypes.VCPUS: pl.col("vcpus"),
     ResourceTypes.VCPUS_OVERCOMMIT: pl.col("vcpus"),
     ResourceTypes.MEMORY_MB: pl.col("memory_mb"),

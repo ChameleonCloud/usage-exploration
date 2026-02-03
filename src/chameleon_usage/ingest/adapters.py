@@ -219,6 +219,16 @@ def _terminated_at(tables: RawTables) -> pl.LazyFrame:
     )
 
 
+def _nova_host_resources(tables: RawTables) -> pl.LazyFrame:
+    return tables[Tables.NOVA_HOSTS].select(
+        pl.col("hypervisor_hostname").alias("node"),
+        "hypervisor_type",
+        pl.col("vcpus").alias("host_vcpus"),
+        pl.col("memory_mb").alias("host_memory_mb"),
+        pl.col("local_gb").alias("host_disk_gb"),
+    )
+
+
 def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
     """Load instances with blazar reservation_id and recovered host from events.
 
@@ -248,6 +258,7 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
     # Recover last known host and termination time from events
     last_host = _last_host(tables)
     event_terminated = _terminated_at(tables)
+    host_resources = _nova_host_resources(tables)
 
     return (
         instances.filter(pl.col("launched_at").is_not_null())  # skip never-launched
@@ -268,6 +279,7 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
                 "terminated_at", "deleted_at", "event_terminated_at"
             ).alias("deleted_at"),
         )
+        .join(host_resources, on="node", how="left")
         .drop(
             "res_hint",
             "res_flavor",
