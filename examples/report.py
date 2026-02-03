@@ -16,7 +16,8 @@ SITES = ["chi_uc", "chi_tacc", "kvm_tacc"]
 TIME_RANGE = (datetime(2015, 1, 1), datetime(2026, 1, 1))
 BUCKET_LENGTH = "7d"
 SPEC = PipelineSpec(
-    group_cols=("metric", "resource", "site", "collector_type"), time_range=TIME_RANGE
+    group_cols=("metric", "resource", "site", "collector_type"),
+    time_range=TIME_RANGE,
 )
 
 
@@ -81,7 +82,17 @@ def main():
                 pl.col("site") == site_name,
                 pl.col("resource") == resource_type,
                 pl.col("metric").is_in(
-                    ["total", "reservable", "available", "idle", "occupied"]
+                    [
+                        "total",
+                        "reservable",
+                        "ondemand_capacity",
+                        "committed",
+                        "available_reservable",
+                        "idle",
+                        "occupied_reservation",
+                        "occupied_ondemand",
+                        "available_ondemand",
+                    ]
                 ),
             )
             make_plots(

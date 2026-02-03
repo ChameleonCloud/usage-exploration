@@ -69,8 +69,8 @@ def _hours_to_counts(hours: pl.LazyFrame) -> pl.LazyFrame:
         (pl.col("total_hours") / HOURS_PER_DAY).alias(QT.TOTAL),
         (pl.col("reservable_hours") / HOURS_PER_DAY).alias(QT.RESERVABLE),
         (pl.col("committed_hours") / HOURS_PER_DAY).alias(QT.COMMITTED),
-        (pl.col("occupied_hours") / HOURS_PER_DAY).alias(QT.OCCUPIED),
-        (pl.col("available_hours") / HOURS_PER_DAY).alias(QT.AVAILABLE),
+        (pl.col("occupied_hours") / HOURS_PER_DAY).alias(QT.OCCUPIED_RESERVATION),
+        (pl.col("available_hours") / HOURS_PER_DAY).alias(QT.AVAILABLE_RESERVABLE),
         (pl.col("idle_hours") / HOURS_PER_DAY).alias(QT.IDLE),
     )
 

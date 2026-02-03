@@ -120,38 +120,38 @@ def collapse_dimension(
     return result, new_spec
 
 
-def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
-    """Compute available and idle from base metrics.
+DERIVED_METRICS = [
+    # ondemand_capacity = total - reservable
+    (QT.ONDEMAND_CAPACITY, QT.TOTAL, QT.RESERVABLE),
+    # available_reservable = reservable - committed
+    (QT.AVAILABLE_RESERVABLE, QT.RESERVABLE, QT.COMMITTED),
+    # idle = committed - occupied_reservation
+    (QT.IDLE, QT.COMMITTED, QT.OCCUPIED_RESERVATION),
+    # available_ondemand = ondemand_capacity - occupied_ondemand
+    (QT.AVAILABLE_ONDEMAND, QT.ONDEMAND_CAPACITY, QT.OCCUPIED_ONDEMAND),
+]
 
-    available = reservable - committed
-    idle = committed - occupied
-    """
+
+def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFrame:
+    """Derive metrics from utilization tree: result = parent - child."""
     df = TimelineModel.validate(df)
 
-    # Pivot needs all non-value columns as index
+    # Pivot metrics to columns
     index_cols = ["timestamp", *[c for c in spec.group_cols if c != "metric"]]
+    pivoted = df.collect().pivot(on="metric", index=index_cols, values="value").fill_null(0)
 
-    pivoted = df.collect().pivot(on="metric", index=index_cols, values="value")
-    cols = pivoted.columns
-
-    if QT.RESERVABLE in cols and QT.COMMITTED in cols:
-        pivoted = pivoted.with_columns(
-            (pl.col(QT.RESERVABLE) - pl.col(QT.COMMITTED)).alias(QT.AVAILABLE),
-        )
-
-    if QT.COMMITTED in cols and QT.OCCUPIED in cols:
-        pivoted = pivoted.with_columns(
-            (pl.col(QT.COMMITTED) - pl.col(QT.OCCUPIED)).alias(QT.IDLE),
-        )
+    # Apply tree derivations
+    for result, parent, child in DERIVED_METRICS:
+        cols = pivoted.columns
+        if parent in cols and child in cols:
+            pivoted = pivoted.with_columns((pl.col(parent) - pl.col(child)).alias(result))
 
     result = (
         pivoted.unpivot(index=index_cols, variable_name="metric", value_name="value")
         .drop_nulls(S.VALUE)
         .lazy()
     )
-
-    result = TimelineModel.validate(result)
-    return result
+    return TimelineModel.validate(result)
 
 
 def add_site_context(

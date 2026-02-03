@@ -28,14 +28,27 @@ SCALE_FACTOR = 3
 
 # Shared color scheme for quantity types
 QTY_COLORS = {
-    QT.OCCUPIED: "green",
-    QT.IDLE: "orange",
-    QT.COMMITTED: "#1f77b4",
-    QT.AVAILABLE: "#aec7e8",
     QT.TOTAL: "black",
     QT.RESERVABLE: "grey",
+    QT.ONDEMAND_CAPACITY: "#9467bd",
+    QT.COMMITTED: "#1f77b4",
+    QT.AVAILABLE_RESERVABLE: "#aec7e8",
+    QT.AVAILABLE_ONDEMAND: "#c5b0d5",
+    QT.IDLE: "orange",
+    QT.OCCUPIED_RESERVATION: "green",
+    QT.OCCUPIED_ONDEMAND: "#2ca02c",
 }
-QTY_ORDER = [QT.TOTAL, QT.RESERVABLE, QT.AVAILABLE, QT.COMMITTED, QT.IDLE, QT.OCCUPIED]
+QTY_ORDER = [
+    QT.TOTAL,
+    QT.RESERVABLE,
+    QT.ONDEMAND_CAPACITY,
+    QT.COMMITTED,
+    QT.AVAILABLE_RESERVABLE,
+    QT.AVAILABLE_ONDEMAND,
+    QT.IDLE,
+    QT.OCCUPIED_RESERVATION,
+    QT.OCCUPIED_ONDEMAND,
+]
 QTY_COLOR_SCALE = alt.Scale(domain=QTY_ORDER, range=[QTY_COLORS[t] for t in QTY_ORDER])
 
 
@@ -55,15 +68,23 @@ def usage_stack_plot(
         y_label: Label for y-axis (e.g., "vCPUs", "Memory (MB)")
     """
     if stack_metrics is None:
-        stack_metrics = [QT.OCCUPIED, QT.IDLE, QT.AVAILABLE]
+        stack_metrics = [
+            QT.OCCUPIED_RESERVATION,
+            QT.IDLE,
+            QT.AVAILABLE_RESERVABLE,
+            QT.OCCUPIED_ONDEMAND,
+            QT.AVAILABLE_ONDEMAND,
+        ]
     if line_metrics is None:
-        line_metrics = [QT.TOTAL, QT.RESERVABLE]
+        line_metrics = [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.ONDEMAND_CAPACITY]
 
     base = alt.Chart(data)
     x_time = alt.X(f"{S.TIMESTAMP}:T", axis=alt.Axis(format="%Y", tickCount="year"))
 
     areas = (
-        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=stack_metrics))
+        base.transform_filter(
+            alt.FieldOneOfPredicate(field=S.METRIC, oneOf=stack_metrics)
+        )
         .transform_calculate(stack_order=f"indexof({stack_metrics}, datum.{S.METRIC})")
         .mark_area(interpolate="step-after")
         .encode(
@@ -75,7 +96,9 @@ def usage_stack_plot(
     )
 
     lines = (
-        base.transform_filter(alt.FieldOneOfPredicate(field=S.METRIC, oneOf=line_metrics))
+        base.transform_filter(
+            alt.FieldOneOfPredicate(field=S.METRIC, oneOf=line_metrics)
+        )
         .mark_line(strokeWidth=2, interpolate="step-after")
         .encode(
             x=x_time,
@@ -159,9 +182,7 @@ def make_plots(
     stack_subset = data_to_plot.filter(pl.col("collector_type") == "current")
     usage_stack_plot(stack_subset, y_label=y_label).properties(
         width=WIDTH, height=WIDTH * 0.6
-    ).save(
-        f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR
-    )
+    ).save(f"{output_path}/{site_name}_stack.png", scale_factor=SCALE_FACTOR)
 
 
 def source_facet_plot(data: pl.DataFrame) -> alt.FacetChart:

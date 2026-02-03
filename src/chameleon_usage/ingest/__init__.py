@@ -84,23 +84,35 @@ blazarAllocCommitted = Adapter(
         ResourceTypes.DISK_GB: pl.col("effective_disk_gb"),
     },
 )
-novaInstanceOccupied = Adapter(
+_occupied_context = {
+    "uuid": "instance_id",
+    "blazar_reservation_id": "blazar_reservation_id",
+    "node": "hypervisor_hostname",
+}
+_occupied_resources = {
+    ResourceTypes.NODE: pl.lit(1),
+    ResourceTypes.VCPUS: pl.col("vcpus"),
+    ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
+    ResourceTypes.DISK_GB: pl.col("root_gb"),
+}
+
+novaInstanceOccupiedReservation = Adapter(
     entity_col="uuid",
-    metric="occupied",
-    source=nova_instances_source,
-    context_cols={
-        "uuid": "instance_id",
-        "blazar_reservation_id": "blazar_reservation_id",
-        "booking_type": "booking_type",
-        "node": "hypervisor_hostname",
-    },
-    # TODO: depends on host vs flavor reservation
-    resource_cols={
-        ResourceTypes.NODE: pl.lit(1),  # TODO flavor fraction
-        ResourceTypes.VCPUS: pl.col("vcpus"),
-        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
-        ResourceTypes.DISK_GB: pl.col("root_gb"),
-    },
+    metric="occupied_reservation",
+    source=lambda t: nova_instances_source(t).filter(
+        pl.col("booking_type") == "reservation"
+    ),
+    context_cols=_occupied_context,
+    resource_cols=_occupied_resources,
+)
+novaInstanceOccupiedOndemand = Adapter(
+    entity_col="uuid",
+    metric="occupied_ondemand",
+    source=lambda t: nova_instances_source(t).filter(
+        pl.col("booking_type") == "ondemand"
+    ),
+    context_cols=_occupied_context,
+    resource_cols=_occupied_resources,
 )
 
 REGISTRY = AdapterRegistry(
@@ -108,7 +120,8 @@ REGISTRY = AdapterRegistry(
         novaHostTotal,
         blazarHostReservable,
         blazarAllocCommitted,
-        novaInstanceOccupied,
+        novaInstanceOccupiedReservation,
+        novaInstanceOccupiedOndemand,
     ]
 )
 

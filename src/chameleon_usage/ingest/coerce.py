@@ -168,6 +168,16 @@ def apply_temporal_clamp(
 # =============================================================================
 
 
+def _add_audit_cols(df: pl.LazyFrame) -> pl.LazyFrame:
+    """Add audit columns for rows that skip clamping."""
+    return df.with_columns(
+        pl.col("start").alias("original_start"),
+        pl.col("end").alias("original_end"),
+        pl.lit(True).alias("valid"),
+        pl.lit("none").alias("coerce_action"),
+    )
+
+
 def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     """
     Apply hierarchical temporal clamping: total → reservable → committed → occupied.
@@ -175,14 +185,14 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     Each layer is clamped to its parent's window:
     - reservable must fit within total (same hypervisor)
     - committed must fit within reservable (same blazar host)
-    - occupied must fit within committed (same reservation + hypervisor)
-
-    On-demand instances (booking_type != "reservation") skip clamping.
+    - occupied_reservation must fit within committed (same reservation + hypervisor)
+    - occupied_ondemand skips clamping (no parent in the hierarchy)
     """
     total = intervals.filter(pl.col(S.METRIC).eq(QT.TOTAL))
     reservable = intervals.filter(pl.col(S.METRIC).eq(QT.RESERVABLE))
     committed = intervals.filter(pl.col(S.METRIC).eq(QT.COMMITTED))
-    occupied = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED))
+    occupied_reservation = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED_RESERVATION))
+    occupied_ondemand = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED_ONDEMAND))
 
     # Level 1: reservable → total
     clamped_reservable = apply_temporal_clamp(
@@ -196,28 +206,25 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
         join_keys=["blazar_host_id", S.RESOURCE],
     )
 
-    # Level 3: occupied → committed (only for reserved instances)
+    # Level 3: occupied_reservation → committed
     # Dedupe: flavor:instance reservations create duplicate allocations per host
     committed_for_occupied = clamped_committed.unique(
         subset=["hypervisor_hostname", "blazar_reservation_id", S.RESOURCE],
         keep="first",
     )
     clamped_occupied = apply_temporal_clamp(
-        occupied,
+        occupied_reservation,
         parents=committed_for_occupied,
         join_keys=["blazar_reservation_id", "hypervisor_hostname", S.RESOURCE],
-        require_parent=pl.col("booking_type").eq("reservation"),
-    )
-
-    # Total rows don't need clamping - just add the audit columns
-    total_with_status = total.with_columns(
-        pl.col("start").alias("original_start"),
-        pl.col("end").alias("original_end"),
-        pl.lit(True).alias("valid"),
-        pl.lit("none").alias("coerce_action"),
     )
 
     return pl.concat(
-        [total_with_status, clamped_reservable, clamped_committed, clamped_occupied],
+        [
+            _add_audit_cols(total),
+            clamped_reservable,
+            clamped_committed,
+            clamped_occupied,
+            _add_audit_cols(occupied_ondemand),
+        ],
         how="diagonal",
     )

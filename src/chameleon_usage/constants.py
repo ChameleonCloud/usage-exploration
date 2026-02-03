@@ -29,11 +29,13 @@ class QuantityTypes:
     TOTAL = "total"
     RESERVABLE = "reservable"
     COMMITTED = "committed"
-    OCCUPIED = "occupied"
-    ACTIVE = "active"
+    OCCUPIED_RESERVATION = "occupied_reservation"
+    OCCUPIED_ONDEMAND = "occupied_ondemand"
 
     # Derived
-    AVAILABLE = "available"
+    ONDEMAND_CAPACITY = "ondemand_capacity"
+    AVAILABLE_RESERVABLE = "available_reservable"
+    AVAILABLE_ONDEMAND = "available_ondemand"
     IDLE = "idle"
 
 
