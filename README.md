@@ -11,7 +11,7 @@ Primary features:
 
 Extract data for one site (writes to `<parquet-dir>/<site>/`):
 ```bash
-uv run chameleon-usage \
+chameleon-usage \
   --sites-config etc/sites.yaml \
   --parquet-dir data/raw_spans \
   --site chi_tacc \
@@ -20,7 +20,7 @@ uv run chameleon-usage \
 
 Process already extracted data (repeat `--site` or omit to run all configured sites):
 ```bash
-uv run chameleon-usage \
+chameleon-usage \
   --sites-config etc/sites.yaml \
   --parquet-dir data/raw_spans \
   --site chi_tacc --site chi_uc --site kvm_tacc \
@@ -31,6 +31,19 @@ uv run chameleon-usage \
 ```
 
 Optional: add `--resample 7d` to bucket results before writing.
+
+Minimal `etc/sites.yaml`:
+```yaml
+chi_tacc:
+  site_name: "CHI@TACC"
+  raw_parquet: "data/raw_spans"
+  db_uris:
+    nova: "mysql://user:pass@127.0.0.1:3307/nova"
+    nova_api: "user://user:pass@127.0.0.1:3307/nova_api"
+    blazar: "mysql://user:pass@127.0.0.1:3307/blazar"
+```
+`db_uris` are only needed for extracting the raw data to parquet, usage analysis
+consuming parquet does not need them, and can run anywhere with access to the data.
 
 See [examples/report.py](examples/report.py) for a complete example with plotting.
 
