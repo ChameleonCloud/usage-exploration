@@ -15,12 +15,11 @@ def _load_parquet(path: str, spec: SourceSpec, validate: bool = False):
     return df
 
 
-def load_raw_tables(base_path: str, site_name: str) -> dict[str, pl.LazyFrame]:
+def load_raw_tables(parquet_path: str) -> dict[str, pl.LazyFrame]:
     """Load all interval sources for a site, validate, and concatenate."""
-    path = f"{base_path}/{site_name}"
 
     # Load raw tables with schema validation
     return {
-        key: _load_parquet(path=path, spec=spec, validate=True)
+        key: _load_parquet(path=parquet_path, spec=spec, validate=True)
         for key, spec in SOURCE_REGISTRY.items()
     }

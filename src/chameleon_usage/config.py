@@ -1,20 +1,29 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class SiteConfig:
+    key: str
     site_name: str
-    raw_spans: str
-    db_uris: dict[str, str]
+    adapters: Optional[list[str]] = None
+    raw_parquet: Optional[str] = None
+    db_uris: Optional[dict[str, str]] = None
 
 
-def load_sites(path: str | Path) -> dict[str, SiteConfig]:
+# TODO: kinda messy, use pydantic?
+def load_config(path: str | Path) -> dict[str, SiteConfig]:
     data = yaml.safe_load(Path(path).read_text()) or {}
-    return {key: SiteConfig(**value) for key, value in data.items()}
+    sites: dict[str, SiteConfig] = {}
+    for key, value in data.items():
+        payload = dict(value)
+        payload["key"] = key
+        sites[key] = SiteConfig(**payload)
+    return sites
 
 
-def load_site(path: str | Path, site_key: str) -> SiteConfig:
-    return load_sites(path)[site_key]
+def get_config_for_site(path: str | Path, site_key: str) -> SiteConfig:
+    return load_config(path)[site_key]

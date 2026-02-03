@@ -13,7 +13,6 @@ import polars as pl
 
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.constants import SchemaCols as S
-from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.math import sweepline, timeseries
 from chameleon_usage.schemas import (
     IntervalModel,
@@ -50,25 +49,6 @@ def run_pipeline(
         return resampled
 
     return derived
-
-
-def process_site(
-    base_path: str,
-    site_name: str,
-    spec: PipelineSpec,
-    collector_type: str = "current",
-    resample_interval: str | None = None,
-) -> pl.LazyFrame:
-    intervals = load_intervals(base_path, site_name, spec.time_range)
-    clamped = clamp_hierarchy(intervals)
-    valid = clamped.filter(pl.col("valid"))
-
-    cols = set(valid.collect_schema().names())
-    if "site" not in cols:
-        valid = valid.with_columns(pl.lit(site_name).alias("site"))
-    if "collector_type" not in cols:
-        valid = valid.with_columns(pl.lit(collector_type).alias("collector_type"))
-    return run_pipeline(valid, spec, resample_interval=resample_interval)
 
 
 # =============================================================================

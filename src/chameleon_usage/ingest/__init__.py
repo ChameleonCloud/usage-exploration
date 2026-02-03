@@ -129,8 +129,7 @@ REGISTRY = AdapterRegistry(
 
 
 def load_intervals(
-    base_path: str,
-    site_name: str,
+    parquet_path: str,
     time_range: tuple[datetime, datetime] | None = None,
 ) -> pl.LazyFrame:
     """Load raw intervals from parquet, optionally filtered to time range.
@@ -140,7 +139,7 @@ def load_intervals(
         site_name: Site directory name
         time_range: Optional (start, end) to filter intervals that overlap this window
     """
-    tables = load_raw_tables(base_path, site_name)
+    tables = load_raw_tables(parquet_path)
     intervals = REGISTRY.to_intervals(tables)
 
     if time_range is not None:

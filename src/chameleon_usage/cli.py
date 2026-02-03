@@ -2,9 +2,12 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from chameleon_usage.config import SiteConfig, load_sites
+import polars as pl
+
+from chameleon_usage.config import SiteConfig, load_config
 from chameleon_usage.extract.dump_db import dump_site_to_parquet
-from chameleon_usage.pipeline import process_site
+from chameleon_usage.ingest import clamp_hierarchy, load_intervals
+from chameleon_usage.pipeline import run_pipeline
 from chameleon_usage.schemas import PipelineSpec
 
 
@@ -20,14 +23,15 @@ def parse_args() -> argparse.Namespace:
         action="append",
         help="Site key from sites.yaml (repeatable). Defaults to all sites.",
     )
+    parser.add_argument(
+        "--parquet-dir",
+        required=True,
+        help="Base path to store or load parquet files.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     extract = subparsers.add_parser("extract")
-    extract.add_argument(
-        "--output",
-        help="Base directory to write parquet. Each site writes to <output>/<site>.",
-    )
     extract.add_argument(
         "--force",
         action="store_true",
@@ -35,10 +39,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     process = subparsers.add_parser("process")
-    process.add_argument(
-        "--input",
-        help="Base directory containing per-site parquet folders.",
-    )
     process.add_argument(
         "--output",
         required=True,
@@ -62,63 +62,47 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _with_output_dir(config: SiteConfig, output_dir: str, site_key: str) -> SiteConfig:
-    raw_spans = str(Path(output_dir) / site_key)
-    Path(raw_spans).mkdir(parents=True, exist_ok=True)
-    return SiteConfig(
-        site_name=config.site_name,
-        raw_spans=raw_spans,
-        db_uris=config.db_uris,
-    )
+def process_site(config: SiteConfig, spec: PipelineSpec, resample: str) -> pl.LazyFrame:
+    intervals = load_intervals(config.raw_parquet, spec.time_range)
+    clamped = clamp_hierarchy(intervals)
+    valid = clamped.filter(pl.col("valid"))
 
+    cols = set(valid.collect_schema().names())
+    if "site" not in cols:
+        valid = valid.with_columns(pl.lit(config.key).alias("site"))
 
-def _resolve_raw_spans(
-    config: SiteConfig, site_key: str, input_dir: str | None
-) -> tuple[str, str]:
-    if input_dir:
-        return input_dir, site_key
-
-    raw_path = Path(config.raw_spans)
-    if raw_path.name == site_key:
-        return str(raw_path.parent), raw_path.name
-
-    return str(raw_path), site_key
+    return run_pipeline(valid, spec, resample_interval=resample)
 
 
 def main() -> None:
     args = parse_args()
-    sites = load_sites(args.sites_config)
-    site_keys = args.site or list(sites.keys())
+    sites_config = load_config(args.sites_config)
+    site_keys = args.site or list(
+        sites_config.keys()
+    )  # default to all configured sites
 
-    if args.command == "extract":
-        for site_key in site_keys:
-            config = sites[site_key]
-            if args.output:
-                config = _with_output_dir(config, args.output, site_key)
+    # override parquet dir if cli set.
+    for site_key in site_keys:
+        config = sites_config[site_key]
+        config.raw_parquet = f"{args.parquet_dir}/{site_key}"
+
+        if args.command == "extract":
             dump_site_to_parquet(config, force=args.force)
-        return
+            return
 
-    if args.command == "process":
-        start = datetime.fromisoformat(args.start_date)
-        end = datetime.fromisoformat(args.end_date)
-        spec = PipelineSpec(
-            group_cols=("metric", "resource", "site", "collector_type"),
-            time_range=(start, end),
-        )
-
-        output_base = Path(args.output)
-        output_base.mkdir(parents=True, exist_ok=True)
-
-        for site_key in site_keys:
-            config = sites[site_key]
-            base_path, site_name = _resolve_raw_spans(config, site_key, args.input)
-
-            usage = process_site(
-                base_path=base_path,
-                site_name=site_name,
-                spec=spec,
-                resample_interval=args.resample,
+        if args.command == "process":
+            start = datetime.fromisoformat(args.start_date)
+            end = datetime.fromisoformat(args.end_date)
+            spec = PipelineSpec(
+                group_cols=("metric", "resource", "site", "collector_type"),
+                time_range=(start, end),
             )
+
+            output_base = Path(args.output)
+            output_base.mkdir(parents=True, exist_ok=True)
+
+            usage = process_site(config, spec, args.resample)
+
             output_dir = output_base / site_key
             output_dir.mkdir(parents=True, exist_ok=True)
             usage.collect().write_parquet(output_dir / "usage.parquet")
