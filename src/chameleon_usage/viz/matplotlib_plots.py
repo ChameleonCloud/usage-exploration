@@ -299,6 +299,60 @@ def plot_site_comparison(
     return fig
 
 
+def plot_legacy_comparison(
+    *,
+    current_timestamps: list,
+    current_total: list[float],
+    current_reservable: list[float],
+    legacy_timestamps: list,
+    legacy_reservable: list[float],
+    title: str,
+    y_label: str = "Nodes",
+    output_path: str | None = None,
+) -> Figure:
+    fig, ax = plt.subplots(1, 1, figsize=(12, 4))
+    ax.plot(
+        current_timestamps,
+        current_total,
+        color="#222222",
+        linewidth=2,
+        drawstyle="steps-post",
+        label="Total (Current)",
+    )
+    ax.plot(
+        current_timestamps,
+        current_reservable,
+        color="#666666",
+        linewidth=2,
+        linestyle="--",
+        drawstyle="steps-post",
+        label="Reservable (Current)",
+    )
+    ax.plot(
+        legacy_timestamps,
+        legacy_reservable,
+        color="#1f77b4",
+        linewidth=2,
+        linestyle=":",
+        drawstyle="steps-post",
+        label="Reservable (Legacy)",
+    )
+
+    ax.set_ylabel(y_label)
+    ax.set_xlabel("Date")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    fig.autofmt_xdate()
+    ax.legend()
+    plt.tight_layout()
+
+    if output_path:
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    return fig
+
+
 def _sum_lists(*lists: list[float]) -> list[float]:
     return [sum(values) for values in zip(*lists)]
 

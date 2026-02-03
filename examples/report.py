@@ -19,6 +19,7 @@ from chameleon_usage.pipeline import (
 )
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.matplotlib_plots import (
+    plot_legacy_comparison,
     plot_resource_utilization,
     plot_site_comparison,
 )
@@ -54,7 +55,7 @@ PLOT_METRICS = [
     "available_ondemand",
 ]
 
-TOTAL_OVERRIDE_SITES = {"chi_tacc", "chi_uc"}
+LEGACY_COMPARISON_SITES = {"chi_tacc", "chi_uc"}
 
 
 def process_current(site_name: str) -> pl.LazyFrame:
@@ -68,8 +69,6 @@ def process_current(site_name: str) -> pl.LazyFrame:
     counts = intervals_to_counts(valid, SPEC)
     counts = clip_to_window(counts, SPEC)
     aligned = align_timestamps(counts, SPEC)
-    if site_name in TOTAL_OVERRIDE_SITES:
-        aligned = override_total_with_reservable(aligned)
     derived = compute_derived_metrics(aligned, SPEC)
     return derived.collect().lazy()
 
@@ -80,33 +79,54 @@ def process_legacy(site_name: str) -> pl.LazyFrame:
     )
 
 
-def override_total_with_reservable(timeline: pl.LazyFrame) -> pl.LazyFrame:
-    reservable = timeline.filter(
-        pl.col(S.METRIC) == QT.RESERVABLE,
-    ).select(
-        S.TIMESTAMP,
-        "site",
-        S.RESOURCE,
-        "collector_type",
-        pl.col(S.VALUE).alias("_reservable_value"),
+def render_legacy_comparison(
+    usage: pl.DataFrame, *, site_name: str, output_path: str
+) -> None:
+    current_total = (
+        usage.filter(
+            pl.col("site") == site_name,
+            pl.col(S.RESOURCE) == RT.NODE,
+            pl.col("collector_type") == "current",
+            pl.col(S.METRIC) == QT.TOTAL,
+        )
+        .sort(S.TIMESTAMP)
+        .select(S.TIMESTAMP, S.VALUE)
     )
+    current_reservable = (
+        usage.filter(
+            pl.col("site") == site_name,
+            pl.col(S.RESOURCE) == RT.NODE,
+            pl.col("collector_type") == "current",
+            pl.col(S.METRIC) == QT.RESERVABLE,
+        )
+        .sort(S.TIMESTAMP)
+        .select(S.TIMESTAMP, S.VALUE)
+    )
+    legacy_reservable = (
+        usage.filter(
+            pl.col("site") == site_name,
+            pl.col(S.RESOURCE) == RT.NODE,
+            pl.col("collector_type") == "legacy",
+            pl.col(S.METRIC) == QT.RESERVABLE,
+        )
+        .sort(S.TIMESTAMP)
+        .select(S.TIMESTAMP, S.VALUE)
+    )
+    if (
+        current_total.is_empty()
+        or current_reservable.is_empty()
+        or legacy_reservable.is_empty()
+    ):
+        return
 
-    return (
-        timeline.join(
-            reservable,
-            on=[S.TIMESTAMP, "site", S.RESOURCE, "collector_type"],
-            how="left",
-        )
-        .with_columns(
-            pl.when(
-                pl.col(S.METRIC).eq(QT.TOTAL)
-                & pl.col("_reservable_value").is_not_null()
-            )
-            .then(pl.col("_reservable_value"))
-            .otherwise(pl.col(S.VALUE))
-            .alias(S.VALUE)
-        )
-        .drop("_reservable_value")
+    plot_legacy_comparison(
+        current_timestamps=current_total.get_column(S.TIMESTAMP).to_list(),
+        current_total=current_total.get_column(S.VALUE).to_list(),
+        current_reservable=current_reservable.get_column(S.VALUE).to_list(),
+        legacy_timestamps=legacy_reservable.get_column(S.TIMESTAMP).to_list(),
+        legacy_reservable=legacy_reservable.get_column(S.VALUE).to_list(),
+        title=f"{site_name} - nodes",
+        output_path=output_path,
     )
 
 
@@ -157,6 +177,13 @@ def main():
             site_series,
             occupied_label="Used",
             output_path=str(output_dir / "sites_nodes.png"),
+        )
+
+    for site_name in sorted(LEGACY_COMPARISON_SITES):
+        render_legacy_comparison(
+            usage,
+            site_name=site_name,
+            output_path=str(output_dir / f"{site_name}_reservable_compare.png"),
         )
 
 
