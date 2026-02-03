@@ -11,10 +11,6 @@ node_usage_report_cache: pl.LazyFrame
 node_usage: pl.LazyFrame
 """
 
-####
-# TODO!!!! check if we can load "hours per node" as fake events
-#################################
-
 from pathlib import Path
 
 import polars as pl

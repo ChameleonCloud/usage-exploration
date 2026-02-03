@@ -213,7 +213,9 @@ def _terminated_at(tables: RawTables) -> pl.LazyFrame:
         pl.col("start_time")
         .filter(is_end_event & is_after_last_resume)
         .min()
-        .alias("event_terminated_at")  # renamed to avoid collision with instances.terminated_at
+        .alias(
+            "event_terminated_at"
+        )  # renamed to avoid collision with instances.terminated_at
     )
 
 
@@ -262,9 +264,16 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             # Use launched_at as start time (rename to created_at for adapter)
             pl.col("launched_at").alias("created_at"),
             # End = min of table values and event-derived (handles both KVM and baremetal)
-            pl.min_horizontal("terminated_at", "deleted_at", "event_terminated_at").alias(
-                "deleted_at"
-            ),
+            pl.min_horizontal(
+                "terminated_at", "deleted_at", "event_terminated_at"
+            ).alias("deleted_at"),
         )
-        .drop("res_hint", "res_flavor", "last_host", "terminated_at", "event_terminated_at", "launched_at")
+        .drop(
+            "res_hint",
+            "res_flavor",
+            "last_host",
+            "terminated_at",
+            "event_terminated_at",
+            "launched_at",
+        )
     )
