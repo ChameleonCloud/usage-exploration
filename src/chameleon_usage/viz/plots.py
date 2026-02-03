@@ -69,11 +69,11 @@ def usage_stack_plot(
     """
     if stack_metrics is None:
         stack_metrics = [
+            QT.OCCUPIED_ONDEMAND,
             QT.OCCUPIED_RESERVATION,
             QT.IDLE,
-            QT.AVAILABLE_RESERVABLE,
-            QT.OCCUPIED_ONDEMAND,
             QT.AVAILABLE_ONDEMAND,
+            QT.AVAILABLE_RESERVABLE,
         ]
     if line_metrics is None:
         line_metrics = [QT.TOTAL, QT.RESERVABLE]
