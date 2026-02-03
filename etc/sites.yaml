@@ -2,33 +2,51 @@
 
 chi_tacc:
   site_name: "CHI@TACC"
-  raw_spans: 'data/raw_spans/chi_tacc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3307/nova"
     nova_api: "mysql://root:root@127.0.0.1:3307/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3307/blazar"
     chameleon_usage: "mysql://root:root@127.0.0.1:3307/chameleon_usage"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
+    - legacy_usage
 
 chi_uc:
   site_name: "CHI@UC"
-  raw_spans: 'data/raw_spans/chi_uc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3309/nova"
     nova_api: "mysql://root:root@127.0.0.1:3309/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3309/blazar"
     chameleon_usage: "mysql://root:root@127.0.0.1:3309/chameleon_usage"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
+    - legacy_usage
 
 kvm_tacc:
   site_name: "KVM@TACC"
-  raw_spans: 'data/raw_spans/kvm_tacc'
   db_uris:
     nova: "mysql://root:root@127.0.0.1:3308/nova"
     nova_api: "mysql://root:root@127.0.0.1:3308/nova_api"
     blazar: "mysql://root:root@127.0.0.1:3308/blazar"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
 
-# chi_edge:
-#   site_name: "CHI@Edge"
-#   raw_spans: 'data/raw_spans/chi_edge'
-#   db_uris:
-#     blazar: "mysql://root:root@127.0.0.1:3310/blazar"
-#     zun: "mysql://root:root@127.0.0.1:3310/zun"
+chi_edge:
+  site_name: "CHI@Edge"
+  db_uris:
+    blazar: "mysql://root:root@127.0.0.1:3310/blazar"
+    zun: "mysql://root:root@127.0.0.1:3310/zun"
+  adapters:
+    - zun_containers
+    - zun_hosts
+    - blazar_devices
+    - blazar_device_allocations
