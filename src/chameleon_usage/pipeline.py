@@ -138,13 +138,17 @@ def compute_derived_metrics(df: pl.LazyFrame, spec: PipelineSpec) -> pl.LazyFram
 
     # Pivot metrics to columns
     index_cols = ["timestamp", *[c for c in spec.group_cols if c != "metric"]]
-    pivoted = df.collect().pivot(on="metric", index=index_cols, values="value").fill_null(0)
+    pivoted = (
+        df.collect().pivot(on="metric", index=index_cols, values="value").fill_null(0)
+    )
 
     # Apply tree derivations
     for result, parent, child in DERIVED_METRICS:
         cols = pivoted.columns
         if parent in cols and child in cols:
-            pivoted = pivoted.with_columns((pl.col(parent) - pl.col(child)).alias(result))
+            pivoted = pivoted.with_columns(
+                (pl.col(parent) - pl.col(child)).alias(result)
+            )
 
     result = (
         pivoted.unpivot(index=index_cols, variable_name="metric", value_name="value")

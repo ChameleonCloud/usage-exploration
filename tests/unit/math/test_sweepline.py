@@ -69,10 +69,14 @@ def test_deltas_uses_value_column():
             "vcpus": [32],
         }
     )
-    deltas = intervals_to_deltas(df, "start", "end", ["group"], value_col="vcpus").collect()
+    deltas = intervals_to_deltas(
+        df, "start", "end", ["group"], value_col="vcpus"
+    ).collect()
 
     assert deltas.filter(pl.col("timestamp") == datetime(2024, 1, 1))["change"][0] == 32
-    assert deltas.filter(pl.col("timestamp") == datetime(2024, 1, 2))["change"][0] == -32
+    assert (
+        deltas.filter(pl.col("timestamp") == datetime(2024, 1, 2))["change"][0] == -32
+    )
 
 
 # MISSING: preserves group columns, multiple group columns

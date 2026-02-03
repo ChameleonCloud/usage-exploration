@@ -367,7 +367,9 @@ def test_require_parent_false_passes_through():
         },
         schema={**SCHEMA, "needs_parent": pl.Boolean},
     )
-    validators = pl.LazyFrame({"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA)
+    validators = pl.LazyFrame(
+        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA
+    )
     result = apply_temporal_clamp(
         target, validators, ["key"], require_parent=pl.col("needs_parent")
     ).collect()
@@ -392,7 +394,9 @@ def test_require_parent_false_with_null_key():
         },
         schema={**SCHEMA, "needs_parent": pl.Boolean},
     )
-    validators = pl.LazyFrame({"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA)
+    validators = pl.LazyFrame(
+        {"start": [dt(5)], "end": [dt(25)], "key": ["A"]}, schema=SCHEMA
+    )
     result = apply_temporal_clamp(
         target, validators, ["key"], require_parent=pl.col("needs_parent")
     ).collect()

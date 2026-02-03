@@ -191,7 +191,9 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     total = intervals.filter(pl.col(S.METRIC).eq(QT.TOTAL))
     reservable = intervals.filter(pl.col(S.METRIC).eq(QT.RESERVABLE))
     committed = intervals.filter(pl.col(S.METRIC).eq(QT.COMMITTED))
-    occupied_reservation = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED_RESERVATION))
+    occupied_reservation = intervals.filter(
+        pl.col(S.METRIC).eq(QT.OCCUPIED_RESERVATION)
+    )
     occupied_ondemand = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED_ONDEMAND))
 
     # Level 1: reservable → total

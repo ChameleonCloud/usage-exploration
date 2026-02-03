@@ -33,7 +33,12 @@ def test_clamp_hierarchy_to_pipeline():
         {
             "entity_id": ["host1", "blazar1", "alloc1", "inst1"],
             "start": [datetime(2024, 1, 1)] * 4,
-            "end": [datetime(2024, 1, 5), datetime(2024, 1, 5), datetime(2024, 1, 3), datetime(2024, 1, 3)],
+            "end": [
+                datetime(2024, 1, 5),
+                datetime(2024, 1, 5),
+                datetime(2024, 1, 3),
+                datetime(2024, 1, 3),
+            ],
             "metric": [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.OCCUPIED],
             "resource": [RT.NODE] * 4,
             "value": [1.0] * 4,
