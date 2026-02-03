@@ -72,90 +72,20 @@ Capacity decomposes into **mutually exclusive states** at any point in time:
 
 1. Most data is stored as soft-deleted rows, with created_at, deleted_at, and a unique ID.
 2. Each "usage state" above corresponds to a particular openstack entity, with unique ids.
-   a. "total capacity" is "all nova hypervisors that existed at time T.
-   b. "reservable" is "all blazar hosts that existed at time T."
-   c. "committed" -> blazar allocations in an active lease
-   d. Active and Stopped -> Nova instances by state, and if they had a blazar reservation_id or not
+   1. "total capacity" is "all nova hypervisors that existed at time T.
+   2. "reservable" is "all blazar hosts that existed at time T."
+   3. "committed" -> blazar allocations in an active lease
+   4. Active and Stopped -> Nova instances by state, and if they had a blazar reservation_id or not
 3. Converting these "spans" to total capacity and usage over time is mechanically straightforward:
-   a. each openstack entity has a unique identifer we can join on
-   b. grouping by "type, cumulative sum produces counts for each type for every timestamp 
-   c. data is small enough to fit into ram
-   d. we only need to downsample for plotting
+   1. each openstack entity has a unique identifer we can join on
+   2. grouping by "type, cumulative sum produces counts for each type for every timestamp 
+   3. data is small enough to fit into ram
+   4. we only need to downsample for plotting
 
 ### What's Hard
 
 1. Some data we want doesn't exist in the live DB. Columns like "maintenance" refer to state "now", and historial state isn't available.
 2. Some data is missing: some historical nova hosts and blazar hosts are not in the DB, primarily pre-2018
 3. We may have multiple data sources that disagree:
-   a. what if a nova instance has deleted_at after the blazar allocation ends?
-   b. what if we import a backup for historical data, and it has conflicting records?
-
-### Open Questions
-
-#### : Representing Maintenance
-
-1. How to represent maintenance?
-   1. Maintenance may remove total capacity.
-   2. Maintenance comes from multiple sources: portal outages, nova->disabled, blazar->not reservable
-
-
-## Goals
-
-1. Must be reproducible: same source data -> same results
-2. Must be auditable: understand *why* data was transformed, and trace decisions to impact on output
-3. Must be explicit and understandable. No magic, and no "write once, read never" code.
-
-## Architecture
-
-```
-┌──────────────┐ ┌───────────┐ ┌───────────────────┐ ┌────────────┐
-│ openstack db │ │ backup db │ │ legacy usage data │ │ prometheus │
-└──────┬───────┘ └─────┬─────┘ └─────────┬─────────┘ └──────┬─────┘
-       │               │                 │                  │
-       └───────────────┴────────┬────────┴──────────────────┘
-                                │
-                                ▼
-                        ┌───────────────┐
-                        │  data loader  │
-                        └───────┬───────┘
-                                │
-                                ▼
-                    ┌───────────────────────┐
-                    │  folders of parquet   │
-                    └───────────┬───────────┘
-                                │
-                                ▼
-              ┌─────────────────────────────────────────┐
-              │  load tables, apply convenience schema  │
-              └──────────────────┬──────────────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 │                               │
-                 ▼                               ▼
-    ┌────────────────────────┐      ┌───────────────────────┐
-    │  parse observation     │      │  map leases →         │
-    │  events                │      │  lead times           │
-    └───────────┬────────────┘      └───────────────────────┘
-                │
-                ▼
-    ┌────────────────────────────────────────────────────────────────────┐
-    │  map events → timelines: join sources, group by id, sum by type    │
-    ├────────────────────────────────────────────────────────────────────┤
-    │                                                                    │
-    │  ┌───────────────────┐                                             │
-    │  │ nova hosts        │──┐                                          │
-    │  │ blazar hosts      │  │                                          │
-    │  │ blazar allocs     │  ├──► join on hypervisor_hostname ──► total │
-    │  │ nova instances    │  │                                 capacity │
-    │  │ ...               │──┤                                          │
-    │  └───────────────────┘  │                                          │
-    │                         ├──► join on hypervisor_hostname ──► reserv.
-    │                         │                                  capacity│
-    │                         │                                          │
-    │                         ├──► join on allocation_id ──► allocated   │
-    │                         │                             capacity     │
-    │                         │                                          │
-    │                         └──► join on instance_uuid ──► used        │
-    │                                                        capacity    │
-    └────────────────────────────────────────────────────────────────────┘
-```
+   1. what if a nova instance has deleted_at after the blazar allocation ends?
+   2. what if we import a backup for historical data, and it has conflicting records?
