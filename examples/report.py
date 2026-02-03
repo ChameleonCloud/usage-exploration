@@ -1,6 +1,7 @@
 """Generate usage reports for all sites."""
 
 from datetime import datetime
+from pathlib import Path
 
 import polars as pl
 
@@ -9,7 +10,12 @@ from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
 from chameleon_usage.pipeline import resample, run_pipeline
 from chameleon_usage.schemas import PipelineSpec
+from chameleon_usage.viz.matplotlib_plots import (
+    plot_resource_utilization,
+    plot_site_comparison,
+)
 from chameleon_usage.viz.plots import make_plots
+from chameleon_usage.viz.prepare import prepare_resource_series, prepare_site_series
 
 TIME_RANGE = (datetime(2022, 1, 1), datetime(2026, 1, 1))
 BUCKET_LENGTH = "30d"
@@ -62,11 +68,12 @@ def main():
         results.append(process_legacy(site))
 
     combined = pl.concat(results).lazy()
-    usage = resample(combined, BUCKET_LENGTH, SPEC).collect().lazy()
+    usage = resample(combined, BUCKET_LENGTH, SPEC).collect()
+    usage_lazy = usage.lazy()
 
     for site_name in SITES:
         for resource_type in SITE_RESOURCES[site_name]:
-            subset = usage.filter(
+            subset = usage_lazy.filter(
                 pl.col("site") == site_name,
                 pl.col("resource") == resource_type,
                 pl.col("metric").is_in(PLOT_METRICS),
@@ -74,6 +81,31 @@ def main():
             make_plots(
                 subset, "output/plots/", f"{site_name}_{resource_type}", resource_type
             )
+
+    output_dir = Path("output/plots_matplotlib")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for site_name in SITES:
+        for resource_type in SITE_RESOURCES[site_name]:
+            series = prepare_resource_series(
+                usage, site=site_name, resource=resource_type
+            )
+            if not series.timestamps:
+                continue
+            plot_resource_utilization(
+                series,
+                title=f"{site_name} - {resource_type}",
+                y_label=resource_type,
+                output_path=str(output_dir / f"{site_name}_{resource_type}_util.png"),
+            )
+
+    sites_for_nodes = [site for site in SITES if RT.NODE in SITE_RESOURCES[site]]
+    site_series = prepare_site_series(usage, sites=sites_for_nodes, resource=RT.NODE)
+    if site_series:
+        plot_site_comparison(
+            site_series,
+            output_path=str(output_dir / "sites_nodes.png"),
+        )
 
 
 if __name__ == "__main__":

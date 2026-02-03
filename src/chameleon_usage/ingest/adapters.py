@@ -220,12 +220,17 @@ def _terminated_at(tables: RawTables) -> pl.LazyFrame:
 
 
 def _nova_host_resources(tables: RawTables) -> pl.LazyFrame:
-    return tables[Tables.NOVA_HOSTS].select(
-        pl.col("hypervisor_hostname").alias("node"),
-        "hypervisor_type",
-        pl.col("vcpus").alias("host_vcpus"),
-        pl.col("memory_mb").alias("host_memory_mb"),
-        pl.col("local_gb").alias("host_disk_gb"),
+    return (
+        tables[Tables.NOVA_HOSTS]
+        .select(
+            pl.col("hypervisor_hostname").alias("node"),
+            pl.col("created_at").alias("host_created_at"),
+            "hypervisor_type",
+            pl.col("vcpus").alias("host_vcpus"),
+            pl.col("memory_mb").alias("host_memory_mb"),
+            pl.col("local_gb").alias("host_disk_gb"),
+        )
+        .sort(["node", "host_created_at"])
     )
 
 
@@ -279,7 +284,14 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
                 "terminated_at", "deleted_at", "event_terminated_at"
             ).alias("deleted_at"),
         )
-        .join(host_resources, on="node", how="left")
+        .sort(["node", "created_at"])
+        .join_asof(
+            host_resources,
+            left_on="created_at",
+            right_on="host_created_at",
+            by="node",
+            strategy="backward",
+        )
         .drop(
             "res_hint",
             "res_flavor",
@@ -287,5 +299,6 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             "terminated_at",
             "event_terminated_at",
             "launched_at",
+            "host_created_at",
         )
     )

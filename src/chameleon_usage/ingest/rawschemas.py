@@ -58,6 +58,7 @@ class BlazarInstanceReservationRaw(BaseRaw):
 class NovaHostRaw(BaseRaw):
     id: str = pa.Field(unique=True, coerce=True)
     created_at: pl.Datetime = pa.Field(coerce=True)
+    updated_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     hypervisor_hostname: str = pa.Field(coerce=True)
     hypervisor_type: str = pa.Field(coerce=True)
