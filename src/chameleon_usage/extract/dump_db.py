@@ -7,7 +7,7 @@ import warnings
 
 import ibis
 
-from chameleon_usage.common import SiteConfig
+from chameleon_usage.config import SiteConfig
 
 TABLES = {
     "blazar": [
