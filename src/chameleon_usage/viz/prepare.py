@@ -72,6 +72,38 @@ def prepare_site_series(
     return output
 
 
+def prepare_site_comparison_series(
+    usage: pl.DataFrame | pl.LazyFrame,
+    *,
+    sites: list[str],
+    resource: str,
+    collector_type: str = "current",
+) -> list[SiteSeries]:
+    output: list[SiteSeries] = []
+    for site in sites:
+        df = _to_wide(
+            usage, site=site, resource=resource, collector_type=collector_type
+        )
+        if df.height == 0:
+            continue
+        output.append(
+            SiteSeries(
+                name=site,
+                timestamps=_timestamps(df),
+                capacity=_series(df, QT.TOTAL),
+                occupied=_sum_lists(
+                    _series(df, QT.COMMITTED),
+                    _series(df, QT.OCCUPIED_ONDEMAND),
+                ),
+                available=_sum_lists(
+                    _series(df, QT.AVAILABLE_RESERVABLE),
+                    _series(df, QT.AVAILABLE_ONDEMAND),
+                ),
+            )
+        )
+    return output
+
+
 def _to_wide(
     usage: pl.DataFrame | pl.LazyFrame,
     *,

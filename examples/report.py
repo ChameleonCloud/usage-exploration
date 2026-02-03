@@ -15,7 +15,10 @@ from chameleon_usage.viz.matplotlib_plots import (
     plot_site_comparison,
 )
 from chameleon_usage.viz.plots import make_plots
-from chameleon_usage.viz.prepare import prepare_resource_series, prepare_site_series
+from chameleon_usage.viz.prepare import (
+    prepare_resource_series,
+    prepare_site_comparison_series,
+)
 
 TIME_RANGE = (datetime(2022, 1, 1), datetime(2026, 1, 1))
 BUCKET_LENGTH = "30d"
@@ -100,10 +103,13 @@ def main():
             )
 
     sites_for_nodes = [site for site in SITES if RT.NODE in SITE_RESOURCES[site]]
-    site_series = prepare_site_series(usage, sites=sites_for_nodes, resource=RT.NODE)
+    site_series = prepare_site_comparison_series(
+        usage, sites=sites_for_nodes, resource=RT.NODE
+    )
     if site_series:
         plot_site_comparison(
             site_series,
+            occupied_label="Used",
             output_path=str(output_dir / "sites_nodes.png"),
         )
 

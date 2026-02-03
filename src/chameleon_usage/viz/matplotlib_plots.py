@@ -188,6 +188,7 @@ def plot_site_comparison(
     *,
     output_path: str | None = None,
     title: str = "Utilization by Site (Stacked)",
+    occupied_label: str = "Occupied",
 ) -> Figure:
     series = list(series)
     if not series:
@@ -205,34 +206,92 @@ def plot_site_comparison(
         base_color = colors[i % len(colors)]
         stack_values.append(site.occupied)
         stack_colors.append(base_color)
-        stack_labels.append(f"{site.name} - Occupied")
+        stack_labels.append(f"{site.name} - {occupied_label}")
+
+    for i, site in enumerate(series):
+        base_color = colors[i % len(colors)]
         stack_values.append(site.available)
-        stack_colors.append(_with_alpha(base_color, 0.4))
+        stack_colors.append(_lighten(base_color, factor=0.55))
         stack_labels.append(f"{site.name} - Available")
 
-    ax1.stackplot(timestamps, stack_values, colors=stack_colors, labels=stack_labels)
+    lower = [0.0] * len(timestamps)
+    for values, color, label in zip(stack_values, stack_colors, stack_labels):
+        upper = _sum_lists(lower, values)
+        ax1.fill_between(
+            timestamps,
+            lower,
+            upper,
+            color=color,
+            label=label,
+            step="post",
+            alpha=0.9,
+            linewidth=0,
+            edgecolor="none",
+            antialiased=False,
+        )
+        lower = upper
+
+    total_capacity = [0.0] * len(timestamps)
+    for site in series:
+        total_capacity = _sum_lists(total_capacity, site.capacity)
+    ax1.plot(
+        timestamps,
+        total_capacity,
+        color="#333333",
+        linewidth=2,
+        drawstyle="steps-post",
+        label="Total Capacity",
+        zorder=10,
+    )
+
     ax1.set_ylabel("Nodes / Equiv")
     ax1.set_title(title)
-    ax1.legend(loc="upper left", ncol=3, fontsize=9)
     ax1.grid(True, alpha=0.3)
 
     for i, site in enumerate(series):
         cap = [v if v != 0 else 1 for v in site.capacity]
-        pct_available = _percent(site.available, cap)
-        smooth = _rolling_mean(pct_available, timestamps, days=30)
-        ax2.plot(timestamps, smooth, color=colors[i % len(colors)], linewidth=2)
+        pct_used = _percent(site.occupied, cap)
+        ax2.plot(
+            timestamps,
+            pct_used,
+            color=colors[i % len(colors)],
+            linewidth=2,
+            drawstyle="steps-post",
+        )
+
+    total_used = [0.0] * len(timestamps)
+    for site in series:
+        total_used = _sum_lists(total_used, site.occupied)
+    total_cap_denom = [v if v != 0 else 1 for v in total_capacity]
+    pct_total_used = _percent(total_used, total_cap_denom)
+    ax2.plot(
+        timestamps,
+        pct_total_used,
+        color="#111111",
+        linewidth=2.0,
+        drawstyle="steps-post",
+    )
 
     ax2.axhline(y=20, color="gray", linestyle="--", linewidth=1)
-    ax2.set_ylabel("% Available")
+    ax2.set_ylabel("% Used")
     ax2.set_xlabel("Date")
     ax2.set_ylim(0, 100)
-    ax2.set_title("% Available by Site")
+    ax2.set_title("% Used by Site")
     ax2.grid(True, alpha=0.3)
 
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     fig.autofmt_xdate()
-    plt.tight_layout()
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        ncol=3,
+        framealpha=0.9,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    plt.tight_layout(rect=(0, 0.08, 1, 1))
 
     if output_path:
         fig.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -277,3 +336,13 @@ def _rolling_mean(values: list[float], timestamps: list, days: int) -> list[floa
 def _with_alpha(color: str, alpha: float) -> tuple[float, float, float, float]:
     r, g, b = mcolors.to_rgb(color)
     return (r, g, b, alpha)
+
+
+def _lighten(color: str, factor: float) -> tuple[float, float, float, float]:
+    r, g, b = mcolors.to_rgb(color)
+    return (
+        r + (1.0 - r) * factor,
+        g + (1.0 - g) * factor,
+        b + (1.0 - b) * factor,
+        1.0,
+    )
