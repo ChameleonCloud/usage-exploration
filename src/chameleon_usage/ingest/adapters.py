@@ -187,9 +187,15 @@ def _instance_events(tables: RawTables) -> pl.LazyFrame:
 
 
 def _last_host(tables: RawTables) -> pl.LazyFrame:
-    """Most recent host per instance from events."""
+    """Most recent compute host per instance from events.
+
+    Only compute_* events have the actual hypervisor hostname in the host field.
+    Other events (conductor_*, api_*, etc.) have the controller hostname which
+    doesn't match any compute_nodes.hypervisor_hostname.
+    """
     return (
         _instance_events(tables)
+        .filter(pl.col("event").str.starts_with("compute_"))
         .group_by("instance_uuid")
         .agg(
             pl.col("host")
