@@ -75,22 +75,26 @@ def _connect_schema(db_uri) -> ibis.BaseBackend:
 
 
 def dump_site_to_parquet(config: SiteConfig, force: bool = False) -> dict[str, str]:
+    os.makedirs(config.raw_parquet, exist_ok=True)
     results = {}
     for schema, uri in config.db_uris.items():
         conn = _connect_schema(uri)
         for table in TABLES.get(schema, []):
             key = f"{schema}.{table}"
-            output_file = f"{config.raw_spans}/{schema}.{table}.parquet"
+            output_file = f"{config.raw_parquet}/{schema}.{table}.parquet"
 
             if os.path.exists(output_file) and not force:
                 results[key] = "SKIP"
+                print(f"  {key}: SKIP (exists)")
                 continue
 
             try:
                 df = _fetch_table(conn, schema, table)
                 df.write_parquet(output_file)
                 results[key] = str(df.height)
-            except Exception:
-                results[key] = "_FAIL_"
+                print(f"  {key}: {df.height} rows")
+            except Exception as e:
+                results[key] = "MISSING"
+                print(f"  {key}: MISSING ({type(e).__name__})")
 
     return results
