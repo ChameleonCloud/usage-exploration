@@ -10,6 +10,7 @@ class ResourceTypes:
     MEMORY_MB = "memory_mb"
     DISK_GB = "disk_gb"
     GPUS = "gpus"
+    DEVICE = "devices"
 
 
 class Metrics:

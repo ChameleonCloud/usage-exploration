@@ -157,6 +157,37 @@ def blazar_allocations_source(tables: RawTables) -> pl.LazyFrame:
     )
 
 
+def _blazar_devices(tables: RawTables) -> pl.LazyFrame:
+    """Device info keyed by device_id."""
+    return tables[Tables.BLAZAR_DEVICES].select(
+        pl.col("id").alias("device_id"),
+        "name",
+        "device_type",
+        "device_driver",
+    )
+
+
+def blazar_device_allocations_source(tables: RawTables) -> pl.LazyFrame:
+    """Load device allocations for chi@edge."""
+    devices = _blazar_devices(tables)
+    reservations = _blazar_reservations(tables)
+    lease_dates = _blazar_lease_dates(tables)
+
+    return (
+        tables[Tables.BLAZAR_DEVICE_ALLOCATIONS]
+        .join(devices, on="device_id", how="left")
+        .join(reservations, on="reservation_id", how="left")
+        .join(lease_dates, on="lease_id", how="left")
+        .with_columns(
+            pl.max_horizontal("start_date", "lease_created_at").alias(
+                "effective_start"
+            ),
+            pl.min_horizontal("end_date", "lease_deleted_at").alias("effective_end"),
+        )
+        .filter(pl.col("effective_start") <= pl.col("effective_end"))
+    )
+
+
 END_EVENTS = [
     "compute_terminate_instance",
     "compute_shelve_offload_instance",

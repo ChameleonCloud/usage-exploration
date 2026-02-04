@@ -9,6 +9,7 @@ from chameleon_usage.ingest.adapters import (
     Adapter,
     AdapterRegistry,
     blazar_allocations_source,
+    blazar_device_allocations_source,
     nova_instances_source,
 )
 from chameleon_usage.ingest.coerce import clamp_hierarchy
@@ -129,6 +130,25 @@ novaInstanceOccupiedOndemand = Adapter(
     ),
     context_cols=_occupied_context,
     resource_cols=_occupied_resources,
+)
+
+# Chi@Edge device allocations
+blazarDeviceCommitted = Adapter(
+    entity_col="id",
+    metric="committed",
+    source=blazar_device_allocations_source,
+    context_cols={
+        "id": "blazar_allocation_id",
+        "lease_id": "blazar_lease_id",
+        "reservation_id": "blazar_reservation_id",
+        "device_id": "blazar_device_id",
+        "name": "device_name",
+    },
+    start_col="effective_start",
+    end_col="effective_end",
+    resource_cols={
+        ResourceTypes.DEVICE: pl.lit(1),
+    },
 )
 
 REGISTRY = AdapterRegistry(
