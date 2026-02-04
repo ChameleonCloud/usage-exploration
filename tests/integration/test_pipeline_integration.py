@@ -4,7 +4,8 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT, ResourceTypes as RT
+from chameleon_usage.constants import Metrics as M
+from chameleon_usage.constants import ResourceTypes as RT
 from chameleon_usage.ingest.adapters import Adapter, AdapterRegistry
 from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.pipeline import run_pipeline
@@ -18,7 +19,7 @@ def test_adapter_output_matches_interval_schema():
     )
     adapter = Adapter(
         entity_col="id",
-        metric=QT.RESERVABLE,
+        metric=M.RESERVABLE,
         source=lambda _: fake_source,
         resource_cols={"nodes": pl.lit(1)},
     )
@@ -39,7 +40,7 @@ def test_clamp_hierarchy_to_pipeline():
                 datetime(2024, 1, 3),
                 datetime(2024, 1, 3),
             ],
-            "metric": [QT.TOTAL, QT.RESERVABLE, QT.COMMITTED, QT.OCCUPIED_RESERVATION],
+            "metric": [M.TOTAL, M.RESERVABLE, M.COMMITTED, M.OCCUPIED_RESERVATION],
             "resource": [RT.NODE] * 4,
             "value": [1.0] * 4,
             "hypervisor_hostname": ["host1"] * 4,
@@ -70,11 +71,11 @@ def test_run_pipeline_produces_derived_metrics():
             "entity_id": ["a", "b"],
             "start": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
             "end": [datetime(2024, 1, 3), datetime(2024, 1, 3)],
-            "metric": [QT.RESERVABLE, QT.COMMITTED],
+            "metric": [M.RESERVABLE, M.COMMITTED],
             "resource": ["vcpu", "vcpu"],
             "value": [1.0, 1.0],
         }
     )
     result = run_pipeline(df, spec).collect()
 
-    assert QT.AVAILABLE_RESERVABLE in result["metric"].to_list()
+    assert M.AVAILABLE_RESERVABLE in result["metric"].to_list()

@@ -16,7 +16,7 @@ from pathlib import Path
 import polars as pl
 from pandera.typing.polars import LazyFrame as LazyGeneric
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.ingest import rawschemas as raw
 from chameleon_usage.schemas import TimelineModel
@@ -60,12 +60,12 @@ def _to_current_hours(aggregated: pl.LazyFrame) -> pl.LazyFrame:
 def _hours_to_counts(hours: pl.LazyFrame) -> pl.LazyFrame:
     return hours.select(
         pl.col("date").alias(S.TIMESTAMP),
-        (pl.col("total_hours") / HOURS_PER_DAY).alias(QT.TOTAL),
-        (pl.col("reservable_hours") / HOURS_PER_DAY).alias(QT.RESERVABLE),
-        (pl.col("committed_hours") / HOURS_PER_DAY).alias(QT.COMMITTED),
-        (pl.col("occupied_hours") / HOURS_PER_DAY).alias(QT.OCCUPIED_RESERVATION),
-        (pl.col("available_hours") / HOURS_PER_DAY).alias(QT.AVAILABLE_RESERVABLE),
-        (pl.col("idle_hours") / HOURS_PER_DAY).alias(QT.IDLE),
+        (pl.col("total_hours") / HOURS_PER_DAY).alias(M.TOTAL),
+        (pl.col("reservable_hours") / HOURS_PER_DAY).alias(M.RESERVABLE),
+        (pl.col("committed_hours") / HOURS_PER_DAY).alias(M.COMMITTED),
+        (pl.col("occupied_hours") / HOURS_PER_DAY).alias(M.OCCUPIED_RESERVATION),
+        (pl.col("available_hours") / HOURS_PER_DAY).alias(M.AVAILABLE_RESERVABLE),
+        (pl.col("idle_hours") / HOURS_PER_DAY).alias(M.IDLE),
     )
 
 

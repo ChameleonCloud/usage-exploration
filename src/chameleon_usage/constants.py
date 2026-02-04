@@ -12,7 +12,7 @@ class ResourceTypes:
     GPUS = "gpus"
 
 
-class QuantityTypes:
+class Metrics:
     TOTAL = "total"
     RESERVABLE = "reservable"
     COMMITTED = "committed"
@@ -33,6 +33,7 @@ class SchemaCols:
     RESOURCE = "resource"
     VALUE = "value"
     TIMESTAMP = "timestamp"
+
 
 class CollectorTypes:
     NEWCOLLECTOR = "current"

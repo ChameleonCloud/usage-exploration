@@ -5,17 +5,15 @@ from datetime import datetime
 import polars as pl
 
 from chameleon_usage.constants import CollectorTypes as CT
-from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.constants import ResourceTypes as RT
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
-from chameleon_usage.pipeline import resample, run_pipeline
+from chameleon_usage.pipeline import resample, run_pipeline, to_wide
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.viz.prepare import (
     plot_collector_comparison,
     plot_site_comparison,
     plot_stacked_usage,
-    to_wide,
 )
 
 

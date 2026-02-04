@@ -11,7 +11,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import Metrics as M
 from chameleon_usage.pipeline import (
     clip_to_window,
     collapse_dimension,
@@ -122,14 +122,14 @@ def test_derived_metrics_computes_available():
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1), datetime(2024, 1, 1)],
-            "metric": [QT.RESERVABLE, QT.COMMITTED],
+            "metric": [M.RESERVABLE, M.COMMITTED],
             "resource": ["vcpu", "vcpu"],
             "value": [10.0, 3.0],
         }
     )
     result = compute_derived_metrics(df, spec).collect()
 
-    available = result.filter(pl.col("metric") == QT.AVAILABLE_RESERVABLE)
+    available = result.filter(pl.col("metric") == M.AVAILABLE_RESERVABLE)
     assert available["value"][0] == 7.0
 
 
@@ -138,7 +138,7 @@ def test_derived_metrics_preserves_extra_group_cols():
     df = pl.LazyFrame(
         {
             "timestamp": [datetime(2024, 1, 1)] * 4,
-            "metric": [QT.RESERVABLE, QT.COMMITTED, QT.RESERVABLE, QT.COMMITTED],
+            "metric": [M.RESERVABLE, M.COMMITTED, M.RESERVABLE, M.COMMITTED],
             "resource": ["vcpu", "vcpu", "memory", "memory"],
             "value": [10.0, 3.0, 100.0, 40.0],
         }
@@ -146,10 +146,10 @@ def test_derived_metrics_preserves_extra_group_cols():
     result = compute_derived_metrics(df, spec).collect()
 
     vcpu_avail = result.filter(
-        (pl.col("metric") == QT.AVAILABLE_RESERVABLE) & (pl.col("resource") == "vcpu")
+        (pl.col("metric") == M.AVAILABLE_RESERVABLE) & (pl.col("resource") == "vcpu")
     )
     mem_avail = result.filter(
-        (pl.col("metric") == QT.AVAILABLE_RESERVABLE) & (pl.col("resource") == "memory")
+        (pl.col("metric") == M.AVAILABLE_RESERVABLE) & (pl.col("resource") == "memory")
     )
     assert vcpu_avail["value"][0] == 7.0
     assert mem_avail["value"][0] == 60.0

@@ -21,7 +21,7 @@ Output columns added: original_start, original_end, valid, coerce_action
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import SchemaCols as S
 
 # =============================================================================
@@ -188,13 +188,11 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
     - occupied_reservation must fit within committed (same reservation + hypervisor)
     - occupied_ondemand skips clamping (no parent in the hierarchy)
     """
-    total = intervals.filter(pl.col(S.METRIC).eq(QT.TOTAL))
-    reservable = intervals.filter(pl.col(S.METRIC).eq(QT.RESERVABLE))
-    committed = intervals.filter(pl.col(S.METRIC).eq(QT.COMMITTED))
-    occupied_reservation = intervals.filter(
-        pl.col(S.METRIC).eq(QT.OCCUPIED_RESERVATION)
-    )
-    occupied_ondemand = intervals.filter(pl.col(S.METRIC).eq(QT.OCCUPIED_ONDEMAND))
+    total = intervals.filter(pl.col(S.METRIC).eq(M.TOTAL))
+    reservable = intervals.filter(pl.col(S.METRIC).eq(M.RESERVABLE))
+    committed = intervals.filter(pl.col(S.METRIC).eq(M.COMMITTED))
+    occupied_reservation = intervals.filter(pl.col(S.METRIC).eq(M.OCCUPIED_RESERVATION))
+    occupied_ondemand = intervals.filter(pl.col(S.METRIC).eq(M.OCCUPIED_ONDEMAND))
 
     # Level 1: reservable → total
     clamped_reservable = apply_temporal_clamp(

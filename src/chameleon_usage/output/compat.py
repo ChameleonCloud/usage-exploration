@@ -8,7 +8,7 @@ Maps from both legacy and current pipeline sources.
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import Metrics as M
 
 HOURS_PER_DAY = 24
 
@@ -30,11 +30,11 @@ def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
         df.filter(
             pl.col("metric").is_in(
                 [
-                    QT.TOTAL,
-                    QT.RESERVABLE,
-                    QT.AVAILABLE_RESERVABLE,
-                    QT.IDLE,
-                    QT.OCCUPIED_RESERVATION,
+                    M.TOTAL,
+                    M.RESERVABLE,
+                    M.AVAILABLE_RESERVABLE,
+                    M.IDLE,
+                    M.OCCUPIED_RESERVATION,
                 ]
             )
         )
@@ -48,13 +48,13 @@ def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("timestamp").alias("date"),
         pl.col("site"),
         pl.lit("unknown").alias("node_type"),
-        ((pl.col(QT.TOTAL) - pl.col(QT.RESERVABLE)) * HOURS_PER_DAY).alias(
+        ((pl.col(M.TOTAL) - pl.col(M.RESERVABLE)) * HOURS_PER_DAY).alias(
             CanonicalStates.MAINTENANCE
         ),
-        (pl.col(QT.AVAILABLE_RESERVABLE) * HOURS_PER_DAY).alias(
+        (pl.col(M.AVAILABLE_RESERVABLE) * HOURS_PER_DAY).alias(
             CanonicalStates.AVAILABLE
         ),
-        (pl.col(QT.IDLE) * HOURS_PER_DAY).alias(CanonicalStates.IDLE_RESERVATION),
-        (pl.col(QT.OCCUPIED_RESERVATION) * HOURS_PER_DAY).alias(CanonicalStates.ACTIVE),
-        (pl.col(QT.TOTAL) * HOURS_PER_DAY).alias("total_hours"),
+        (pl.col(M.IDLE) * HOURS_PER_DAY).alias(CanonicalStates.IDLE_RESERVATION),
+        (pl.col(M.OCCUPIED_RESERVATION) * HOURS_PER_DAY).alias(CanonicalStates.ACTIVE),
+        (pl.col(M.TOTAL) * HOURS_PER_DAY).alias("total_hours"),
     ).lazy()

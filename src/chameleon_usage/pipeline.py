@@ -11,7 +11,7 @@ USE run_pipeline() for the standard flow. Individual functions for custom pipeli
 
 import polars as pl
 
-from chameleon_usage.constants import QuantityTypes as QT
+from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.math import sweepline, timeseries
 from chameleon_usage.schemas import (
@@ -122,13 +122,13 @@ def collapse_dimension(
 
 DERIVED_METRICS = [
     # ondemand_capacity = total - reservable
-    (QT.ONDEMAND_CAPACITY, QT.TOTAL, QT.RESERVABLE),
+    (M.ONDEMAND_CAPACITY, M.TOTAL, M.RESERVABLE),
     # available_reservable = reservable - committed
-    (QT.AVAILABLE_RESERVABLE, QT.RESERVABLE, QT.COMMITTED),
+    (M.AVAILABLE_RESERVABLE, M.RESERVABLE, M.COMMITTED),
     # idle = committed - occupied_reservation
-    (QT.IDLE, QT.COMMITTED, QT.OCCUPIED_RESERVATION),
+    (M.IDLE, M.COMMITTED, M.OCCUPIED_RESERVATION),
     # available_ondemand = ondemand_capacity - occupied_ondemand
-    (QT.AVAILABLE_ONDEMAND, QT.ONDEMAND_CAPACITY, QT.OCCUPIED_ONDEMAND),
+    (M.AVAILABLE_ONDEMAND, M.ONDEMAND_CAPACITY, M.OCCUPIED_ONDEMAND),
 ]
 
 
@@ -174,7 +174,9 @@ def add_site_context(
 # =============================================================================
 
 
-def combine_cols(df: pl.DataFrame, cols: list[str], sep: str = "_") -> tuple[pl.DataFrame, str]:
+def combine_cols(
+    df: pl.DataFrame, cols: list[str], sep: str = "_"
+) -> tuple[pl.DataFrame, str]:
     """Combine columns into a single pivot key."""
     alias = sep.join(cols)
     expr = pl.col(cols[0]).cast(pl.Utf8)
@@ -203,4 +205,8 @@ def to_wide(
     else:
         pivot_on = pivot_cols[0]
 
-    return df.pivot(values=S.VALUE, index=index_cols, on=pivot_on).sort(S.TIMESTAMP).fill_null(0)
+    return (
+        df.pivot(values=S.VALUE, index=index_cols, on=pivot_on)
+        .sort(S.TIMESTAMP)
+        .fill_null(0)
+    )
