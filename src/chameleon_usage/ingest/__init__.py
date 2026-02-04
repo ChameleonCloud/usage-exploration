@@ -132,7 +132,20 @@ novaInstanceOccupiedOndemand = Adapter(
     resource_cols=_occupied_resources,
 )
 
-# Chi@Edge device allocations
+# Chi@Edge device adapters
+blazarDeviceReservable = Adapter(
+    entity_col="id",
+    metric="reservable",
+    source=lambda t: t[Tables.BLAZAR_DEVICES].filter(pl.col("reservable") == 1),
+    context_cols={
+        "id": "blazar_device_id",
+        "name": "device_name",
+    },
+    resource_cols={
+        ResourceTypes.DEVICE: pl.lit(1),
+    },
+)
+
 blazarDeviceCommitted = Adapter(
     entity_col="id",
     metric="committed",

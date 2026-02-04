@@ -5,7 +5,7 @@ from datetime import datetime
 import polars as pl
 
 from chameleon_usage.constants import ResourceTypes as RT
-from chameleon_usage.ingest import blazarDeviceCommitted
+from chameleon_usage.ingest import blazarDeviceCommitted, blazarDeviceReservable
 from chameleon_usage.ingest.adapters import AdapterRegistry
 from chameleon_usage.ingest.rawschemas import (
     BlazarDeviceAllocationRaw,
@@ -16,6 +16,7 @@ from chameleon_usage.ingest.rawschemas import (
 from chameleon_usage.pipeline import resample, run_pipeline
 from chameleon_usage.schemas import PipelineSpec
 from chameleon_usage.sources import Tables
+from chameleon_usage.viz.plots import AreaLayer, LineLayer, plot_stacked_step_with_pct
 
 
 def load_edge_tables(path: str) -> dict[str, pl.LazyFrame]:
@@ -38,7 +39,8 @@ def load_edge_tables(path: str) -> dict[str, pl.LazyFrame]:
 
 def main():
     path = "data/current/chi_edge"
-    time_range = (datetime(2021, 1, 1), datetime(2026, 1, 1))
+    time_range = (datetime(2022, 3, 1), datetime(2026, 1, 1))
+    bucket_length = "7d"
 
     spec = PipelineSpec(
         group_cols=("metric", "resource", "site", "collector_type"),
@@ -46,19 +48,41 @@ def main():
     )
 
     tables = load_edge_tables(path)
-    registry = AdapterRegistry([blazarDeviceCommitted])
+    registry = AdapterRegistry([blazarDeviceReservable, blazarDeviceCommitted])
     intervals = registry.to_intervals(tables).with_columns(
         pl.lit("chi_edge").alias("site"),
         pl.lit("current").alias("collector_type"),
     )
 
     results = run_pipeline(intervals, spec)
-    usage = resample(results, "1d", spec).collect()
+    usage = resample(results, bucket_length, spec).collect()
 
-    pl.Config.set_tbl_cols(-1)
-    print(f"Rows: {usage.height}")
-    with pl.Config(tbl_rows=100, tbl_cols=20):
-        print(usage.filter(pl.col("resource") == RT.DEVICE).tail(20))
+    # Filter to device data
+    devices = usage.filter(pl.col("resource") == RT.DEVICE)
+    committed = devices.filter(pl.col("metric") == "committed")
+    available = devices.filter(pl.col("metric") == "available_reservable")
+    reservable = devices.filter(pl.col("metric") == "reservable")
+
+    x = committed.get_column("timestamp").to_list()
+    committed_vals = committed.get_column("value").fill_null(0).to_list()
+    available_vals = available.get_column("value").fill_null(0).to_list()
+    reservable_vals = reservable.get_column("value").fill_null(0).to_list()
+
+    # Stack: committed + available = reservable total
+    areas = [
+        AreaLayer(committed_vals, "#2ca02c", "Committed"),
+        AreaLayer(available_vals, "#aec7e8", "Available"),
+    ]
+    lines = [LineLayer(reservable_vals, "#333333", "Reservable", linewidth=2)]
+
+    plot_stacked_step_with_pct(
+        x,
+        areas,
+        lines=lines,
+        title="chi_edge - devices",
+        y_label="devices",
+        output_path="output/plots/chi_edge_devices.png",
+    )
 
 
 if __name__ == "__main__":
