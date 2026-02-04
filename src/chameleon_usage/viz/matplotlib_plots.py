@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from statistics import median
 from typing import Iterable
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import colors as mcolors
 from matplotlib.figure import Figure
 
@@ -30,7 +30,32 @@ class ResourceSeries:
     available: list[float]
 
 
-def plot_resource_utilization(
+@dataclass(frozen=True)
+class LegacyComparisonSeries:
+    timestamps: list
+    current_total: list[float]
+    current_reservable: list[float]
+    legacy_reservable: list[float]
+
+
+def _step_fill(ax, x, y0, y1, *, color, label, alpha=0.8):
+    ax.fill_between(x, y0, y1, color=color, label=label, step="post", alpha=alpha)
+
+
+def _step_line(ax, x, y, *, color, label, linewidth=2, linestyle="-", zorder=None):
+    ax.plot(
+        x,
+        y,
+        color=color,
+        linewidth=linewidth,
+        linestyle=linestyle,
+        label=label,
+        drawstyle="steps-post",
+        zorder=zorder,
+    )
+
+
+def do_plot_stacked_usage(
     series: ResourceSeries,
     *,
     title: str,
@@ -50,60 +75,27 @@ def plot_resource_utilization(
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
-    ax1.fill_between(
-        x,
-        0,
-        active_reserved,
-        label="Active (Reserved)",
-        color="#2ca02c",
-        step="post",
-        alpha=0.8,
-    )
-    ax1.fill_between(
+    _step_fill(ax1, x, 0, active_reserved, color="#2ca02c", label="Active (Reserved)")
+    _step_fill(
+        ax1,
         x,
         active_reserved,
         active_total,
-        label="Active (On-Demand)",
         color="#98df8a",
-        step="post",
-        alpha=0.8,
+        label="Active (On-Demand)",
     )
-    ax1.fill_between(
-        x,
-        active_total,
-        used_total,
-        label="Idle (Reserved)",
-        color="#1f77b4",
-        step="post",
-        alpha=0.8,
+    _step_fill(
+        ax1, x, active_total, used_total, color="#1f77b4", label="Idle (Reserved)"
     )
-    ax1.fill_between(
-        x,
-        used_total,
-        stack_total,
-        label="Available",
-        color="#87CEEB",
-        step="post",
-        alpha=0.8,
-    )
-
-    ax1.plot(
-        x,
-        total,
-        color="#333333",
-        linewidth=2,
-        label="Total Capacity",
-        drawstyle="steps-post",
-        zorder=10,
-    )
-    ax1.plot(
+    _step_fill(ax1, x, used_total, stack_total, color="#87CEEB", label="Available")
+    _step_line(ax1, x, total, color="#333333", label="Total Capacity", zorder=10)
+    _step_line(
+        ax1,
         x,
         reservable,
         color="#666666",
-        linewidth=2,
-        linestyle="--",
         label="Reservable Capacity",
-        drawstyle="steps-post",
+        linestyle="--",
         zorder=10,
     )
 
@@ -120,41 +112,27 @@ def plot_resource_utilization(
     pct_used_total = _sum_lists(pct_active_total, pct_idle)
     pct_stack_total = _sum_lists(pct_used_total, pct_available)
 
-    ax2.fill_between(
-        x,
-        0,
-        pct_active_reserved,
-        label="Active (Reserved)",
-        color="#2ca02c",
-        step="post",
-        alpha=0.8,
+    _step_fill(
+        ax2, x, 0, pct_active_reserved, color="#2ca02c", label="Active (Reserved)"
     )
-    ax2.fill_between(
+    _step_fill(
+        ax2,
         x,
         pct_active_reserved,
         pct_active_total,
-        label="Active (On-Demand)",
         color="#98df8a",
-        step="post",
-        alpha=0.8,
+        label="Active (On-Demand)",
     )
-    ax2.fill_between(
+    _step_fill(
+        ax2,
         x,
         pct_active_total,
         pct_used_total,
-        label="Idle (Reserved)",
         color="#1f77b4",
-        step="post",
-        alpha=0.8,
+        label="Idle (Reserved)",
     )
-    ax2.fill_between(
-        x,
-        pct_used_total,
-        pct_stack_total,
-        label="Available",
-        color="#87CEEB",
-        step="post",
-        alpha=0.8,
+    _step_fill(
+        ax2, x, pct_used_total, pct_stack_total, color="#87CEEB", label="Available"
     )
 
     ax2.set_ylabel("Percentage (%)")
@@ -183,7 +161,7 @@ def plot_resource_utilization(
     return fig
 
 
-def plot_site_comparison(
+def do_plot_site_comparison(
     series: Iterable[SiteSeries],
     *,
     output_path: str | None = None,
@@ -299,43 +277,65 @@ def plot_site_comparison(
     return fig
 
 
-def plot_legacy_comparison(
+def do_plot_collector_comparison(
+    series: LegacyComparisonSeries,
     *,
-    current_timestamps: list,
-    current_total: list[float],
-    current_reservable: list[float],
-    legacy_timestamps: list,
-    legacy_reservable: list[float],
     title: str,
     y_label: str = "Nodes",
     output_path: str | None = None,
 ) -> Figure:
+    x = series.timestamps
+    current_arr = np.asarray(series.current_reservable)
+    legacy_arr = np.asarray(series.legacy_reservable)
+
     fig, ax = plt.subplots(1, 1, figsize=(12, 4))
-    ax.plot(
-        current_timestamps,
-        current_total,
+
+    # Diff regions (can't use helper - needs `where`)
+    ax.fill_between(
+        x,
+        current_arr,
+        legacy_arr,
+        where=legacy_arr > current_arr,  # type: ignore[arg-type]
+        color="#9CC9FF",
+        alpha=0.45,
+        step="post",
+        label="In Legacy, Not Current",
+    )
+    ax.fill_between(
+        x,
+        current_arr,
+        legacy_arr,
+        where=current_arr > legacy_arr,  # type: ignore[arg-type]
+        color="#FDD9A0",
+        alpha=0.45,
+        step="post",
+        label="In Current, Not Legacy",
+    )
+
+    _step_line(
+        ax,
+        x,
+        series.current_total,
         color="#222222",
-        linewidth=2,
-        drawstyle="steps-post",
         label="Total (Current)",
+        linewidth=1,
     )
-    ax.plot(
-        current_timestamps,
-        current_reservable,
+    _step_line(
+        ax,
+        x,
+        series.current_reservable,
         color="#666666",
-        linewidth=2,
-        linestyle="--",
-        drawstyle="steps-post",
         label="Reservable (Current)",
+        linewidth=1,
+        linestyle="--",
     )
-    ax.plot(
-        legacy_timestamps,
-        legacy_reservable,
-        color="#1f77b4",
-        linewidth=2,
-        linestyle=":",
-        drawstyle="steps-post",
+    _step_line(
+        ax,
+        x,
+        series.legacy_reservable,
+        color="#0057B8",
         label="Reservable (Legacy)",
+        linewidth=1,
     )
 
     ax.set_ylabel(y_label)
@@ -344,7 +344,7 @@ def plot_legacy_comparison(
     ax.grid(True, alpha=0.3)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     fig.autofmt_xdate()
-    ax.legend()
+    ax.legend(loc="upper left")
     plt.tight_layout()
 
     if output_path:
@@ -359,37 +359,6 @@ def _sum_lists(*lists: list[float]) -> list[float]:
 
 def _percent(values: list[float], denom: list[float]) -> list[float]:
     return [v / d * 100 if d else 0 for v, d in zip(values, denom)]
-
-
-def _rolling_mean(values: list[float], timestamps: list, days: int) -> list[float]:
-    if len(values) < 2:
-        return values
-
-    deltas = []
-    for a, b in zip(timestamps[:-1], timestamps[1:]):
-        if b > a:
-            deltas.append((b - a).total_seconds())
-    if not deltas:
-        return values
-
-    step = median(deltas)
-    window = max(1, round((days * 86400) / step))
-
-    out = []
-    total = 0.0
-    buf = []
-    for v in values:
-        buf.append(v)
-        total += v
-        if len(buf) > window:
-            total -= buf.pop(0)
-        out.append(total / len(buf))
-    return out
-
-
-def _with_alpha(color: str, alpha: float) -> tuple[float, float, float, float]:
-    r, g, b = mcolors.to_rgb(color)
-    return (r, g, b, alpha)
 
 
 def _lighten(color: str, factor: float) -> tuple[float, float, float, float]:

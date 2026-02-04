@@ -19,15 +19,13 @@ from pandera.typing.polars import LazyFrame as LazyGeneric
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.ingest import rawschemas as raw
-from chameleon_usage.schemas import UsageModel
+from chameleon_usage.schemas import TimelineModel
 
 HOURS_PER_DAY = 24
 
 
-def load_legacy_usage_cache(base_path: str, site_name: str) -> pl.LazyFrame:
-    parquet_path = (
-        Path(base_path) / site_name / "chameleon_usage.node_usage_report_cache.parquet"
-    )
+def load_legacy_usage_cache(path: str) -> pl.LazyFrame:
+    parquet_path = Path(path) / "chameleon_usage.node_usage_report_cache.parquet"
     if not parquet_path.exists():
         return raw.NodeUsageReportCache.empty().lazy()
 
@@ -84,19 +82,13 @@ def _to_long_format(wide: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def get_legacy_usage_counts(
-    base_path: str, site_name: str, collector_type: str
-) -> LazyGeneric[UsageModel]:
+def get_legacy_usage_counts(path: str) -> LazyGeneric[TimelineModel]:
     """Transform legacy usage cache to UsageModel."""
 
-    usage_cache = load_legacy_usage_cache(base_path, site_name)
+    usage_cache = load_legacy_usage_cache(path)
     aggregated = _aggregate_hours_by_date(usage_cache)
     hours = _to_current_hours(aggregated)
     wide = _hours_to_counts(hours)
 
-    long_output = _to_long_format(wide).with_columns(
-        pl.lit(site_name).alias("site"),
-        pl.lit("legacy").alias("collector_type"),
-        pl.lit("nodes").alias(S.RESOURCE),
-    )
-    return UsageModel.validate(long_output)
+    long_output = _to_long_format(wide).with_columns(pl.lit("nodes").alias(S.RESOURCE))
+    return TimelineModel.validate(long_output)

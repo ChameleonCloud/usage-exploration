@@ -34,6 +34,10 @@ class SchemaCols:
     VALUE = "value"
     TIMESTAMP = "timestamp"
 
+class CollectorTypes:
+    NEWCOLLECTOR = "current"
+    EXISTING = "legacy"
+
 
 class Cols:
     """Raw DB column names."""
