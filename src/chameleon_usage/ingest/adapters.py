@@ -108,6 +108,7 @@ def _blazar_lease_dates(tables: RawTables) -> pl.LazyFrame:
     """Lease dates keyed by id."""
     return tables[Tables.BLAZAR_LEASES].select(
         pl.col("id").alias("lease_id"),
+        "project_id",
         "start_date",
         "end_date",
         pl.col("created_at").alias("lease_created_at"),

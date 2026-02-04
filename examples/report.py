@@ -20,7 +20,7 @@ from chameleon_usage.viz.prepare import (
 def _process_new_collector(site_name, pipeline_spec: PipelineSpec):
     time_range = pipeline_spec.time_range
 
-    path = f"data/raw_spans/{site_name}"
+    path = f"data/current/{site_name}"
 
     intervals = load_intervals(path, time_range).collect().lazy()
     preprocessed = clamp_hierarchy(intervals).collect().lazy()
@@ -33,7 +33,7 @@ def _process_new_collector(site_name, pipeline_spec: PipelineSpec):
 
 
 def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
-    path = f"data/raw_spans/{site_name}"
+    path = f"data/current/{site_name}"
     existing_collector_results = get_legacy_usage_counts(path).with_columns(
         pl.lit(site_name).alias("site"),
         pl.lit("legacy").alias("collector_type"),

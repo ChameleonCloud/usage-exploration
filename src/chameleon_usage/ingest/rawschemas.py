@@ -26,6 +26,7 @@ class BlazarHostRaw(BaseRaw):
 
 class BlazarLeaseRaw(BaseRaw):
     id: str = pa.Field(unique=True)
+    project_id: str
     created_at: pl.Datetime = pa.Field(coerce=True)
     deleted_at: pl.Datetime = pa.Field(nullable=True, coerce=True)
     start_date: pl.Datetime = pa.Field(coerce=True)

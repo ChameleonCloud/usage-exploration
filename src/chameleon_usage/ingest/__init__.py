@@ -156,6 +156,7 @@ blazarDeviceCommitted = Adapter(
         "reservation_id": "blazar_reservation_id",
         "device_id": "blazar_device_id",
         "name": "device_name",
+        "project_id": "project_id",
     },
     start_col="effective_start",
     end_col="effective_end",
