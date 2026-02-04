@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     extract = subparsers.add_parser("extract")
     extract.add_argument(
         "--db-uri",
-        help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URL.",
+        help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
     )
 
     process = subparsers.add_parser("process")
@@ -82,9 +82,9 @@ def main() -> None:
     if args.command == "extract":
         from chameleon_usage.extract.dump_db import dump_to_parquet
 
-        db_uri = args.db_uri or os.environ.get("DATABASE_URL")
+        db_uri = args.db_uri or os.environ.get("DATABASE_URI")
         if not db_uri:
-            raise SystemExit("Error: --db-uri or $DATABASE_URL required for extract")
+            raise SystemExit("Error: --db-uri or $DATABASE_URI required for extract")
 
         dump_to_parquet(db_uri, args.parquet_dir)
         return

@@ -21,7 +21,10 @@ pipeline = [
     "polars>=1.37.1",
     "seaborn>=0.13.2",
 ]
-all = ["chameleon-usage[pipeline]"]
+s3 = [
+    "s3fs>=2024.0.0",
+]
+all = ["chameleon-usage[pipeline,s3]"]
 
 [project.scripts]
 chameleon-usage = "chameleon_usage.cli:main"

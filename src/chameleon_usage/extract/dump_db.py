@@ -10,15 +10,35 @@ import warnings
 import ibis
 from ibis.common.exceptions import TableNotFound
 
-from chameleon_usage.sources import SOURCE_REGISTRY
-
-
-def _get_tables_to_dump() -> dict[str, list[str]]:
-    """Derive table list from SOURCE_REGISTRY."""
-    tables: dict[str, list[str]] = {}
-    for spec in SOURCE_REGISTRY.values():
-        tables.setdefault(spec.db_schema, []).append(spec.db_table)
-    return tables
+# Tables to dump, grouped by schema.
+# Keep in sync with sources.SOURCE_REGISTRY if adding new tables.
+TABLES = {
+    "nova": [
+        "compute_nodes",
+        "instances",
+        "instance_actions",
+        "instance_actions_events",
+    ],
+    "nova_api": [
+        "request_specs",
+    ],
+    "blazar": [
+        "computehosts",
+        "computehost_allocations",
+        "reservations",
+        "instance_reservations",
+        "leases",
+        "devices",
+        "device_allocations",
+        "device_extra_capabilities",
+        "device_reservations",
+    ],
+    "zun": [
+        "container",
+        "container_actions",
+        "container_actions_events",
+    ],
+}
 
 
 def _connect(db_uri: str) -> ibis.BaseBackend:
@@ -30,7 +50,7 @@ def _connect(db_uri: str) -> ibis.BaseBackend:
 
 def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
     """
-    Dump all tables from SOURCE_REGISTRY to parquet files.
+    Dump all tables to parquet files.
 
     Args:
         db_uri: Database connection string (mysql://user:pass@host:port)
@@ -44,17 +64,16 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
         os.makedirs(output_path, exist_ok=True)
 
     conn = _connect(db_uri)
-    tables = _get_tables_to_dump()
     results = {}
 
-    for schema, tablenames in tables.items():
+    for schema, tablenames in TABLES.items():
         for tablename in tablenames:
             key = f"{schema}.{tablename}"
             output_file = f"{output_path}/{key}.parquet"
 
             try:
                 table = conn.table(tablename, database=schema)
-                table.to_parquet(output_file)
+                table.to_parquet(output_file, compression="zstd")
 
                 num_rows = table.count().execute()
                 results[key] = str(num_rows)

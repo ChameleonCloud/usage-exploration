@@ -7,23 +7,68 @@ Primary features:
 - Process source data containing timestamps and unique identifiers into timeline of usage over time.
 - Plotting and analysis methods for usage over time results.
 
-## Usage (of the tool, not the data)
+## Installation
 
-Extract data for one site (writes to `<parquet-dir>/<site>/`):
 ```bash
-chameleon-usage \
-  --sites-config etc/sites.yaml \
-  --parquet-dir data/raw_spans \
-  --site chi_tacc \
-  extract
+# Core (extract only)
+pip install chameleon-usage
+
+# With S3/Ceph support
+pip install chameleon-usage[s3]
+
+# With pipeline processing
+pip install chameleon-usage[pipeline]
+
+# Everything
+pip install chameleon-usage[all]
 ```
 
-Process already extracted data (repeat `--site` or omit to run all configured sites):
+## Usage
+
+### Extract: Database to Parquet
+
+Extract dumps tables from a MySQL database to parquet files.
+
+**To local directory:**
+```bash
+chameleon-usage --parquet-dir ./data extract --db-uri mysql://user:pass@host:3306
+```
+
+**To S3 or Ceph RGW:**
+```bash
+# Set credentials via environment
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_ENDPOINT_URL=https://rgw.example.com:8080  # for Ceph RGW
+
+chameleon-usage --parquet-dir s3://bucket/path extract --db-uri mysql://user:pass@host:3306
+```
+
+**Using environment variable for database:**
+```bash
+export DATABASE_URI=mysql://user:pass@host:3306
+chameleon-usage --parquet-dir ./data extract
+```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URI` | Database URI (fallback if `--db-uri` not provided) |
+| `AWS_ACCESS_KEY_ID` | S3/Ceph access key |
+| `AWS_SECRET_ACCESS_KEY` | S3/Ceph secret key |
+| `AWS_ENDPOINT_URL` | Custom S3 endpoint (for Ceph RGW, MinIO, etc.) |
+| `AWS_REGION` | AWS region (optional) |
+
+### Process: Parquet to Usage Metrics
+
+Process extracted data into usage metrics. Requires `[pipeline]` extras.
+
 ```bash
 chameleon-usage \
   --sites-config etc/sites.yaml \
   --parquet-dir data/raw_spans \
-  --site chi_tacc --site chi_uc --site kvm_tacc \
+  --site chi_tacc --site chi_uc \
   process \
   --output output/usage \
   --start-date 2015-01-01 \
@@ -32,18 +77,11 @@ chameleon-usage \
 
 Optional: add `--resample 7d` to bucket results before writing.
 
-Minimal `etc/sites.yaml`:
+Minimal `etc/sites.yaml` (only needed for process command):
 ```yaml
 chi_tacc:
   site_name: "CHI@TACC"
-  raw_parquet: "data/raw_spans"
-  db_uris:
-    nova: "mysql://user:pass@127.0.0.1:3307/nova"
-    nova_api: "user://user:pass@127.0.0.1:3307/nova_api"
-    blazar: "mysql://user:pass@127.0.0.1:3307/blazar"
 ```
-`db_uris` are only needed for extracting the raw data to parquet, usage analysis
-consuming parquet does not need them, and can run anywhere with access to the data.
 
 See [examples/report.py](examples/report.py) for a complete example with plotting.
 
