@@ -25,6 +25,18 @@ pip install chameleon-usage[all]
 
 ## Usage
 
+### Database Setup
+
+Generate SQL to grant read access to required tables:
+
+```bash
+chameleon-usage print-grant-sql
+chameleon-usage print-grant-sql --user myuser --host '10.0.0.%'
+```
+
+This requires admin access to set the permissions, but afterwards only the 
+read-only user will be used to fetch data.
+
 ### Extract: Database to Parquet
 
 Extract dumps tables from a MySQL database to parquet files.
@@ -77,11 +89,37 @@ chameleon-usage \
 
 Optional: add `--resample 7d` to bucket results before writing.
 
-Minimal `etc/sites.yaml` (only needed for process command):
+**Using config file:**
+```bash
+chameleon-usage --sites-config etc/sites.yaml extract
+chameleon-usage --sites-config etc/sites.yaml --site chi_tacc extract
+```
+
+Example `etc/sites.yaml`:
 ```yaml
 chi_tacc:
   site_name: "CHI@TACC"
+  raw_parquet: "s3://bucket/chi_tacc"
+  # db_uri can be omitted if using $DATABASE_URI env var
+
+chi_uc:
+  site_name: "CHI@UC"
+  raw_parquet: "s3://bucket/chi_uc"
 ```
+
+**Mixing config with env vars (recommended for secrets):**
+```bash
+# Config has paths, env has credentials
+export DATABASE_URI=mysql://user:pass@host:3306
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+
+chameleon-usage --sites-config etc/sites.yaml --site chi_tacc extract
+```
+
+Priority order:
+- `--db-uri` > `$DATABASE_URI` > `config.db_uri`
+- `--parquet-dir` > `config.raw_parquet`
 
 See [examples/report.py](examples/report.py) for a complete example with plotting.
 

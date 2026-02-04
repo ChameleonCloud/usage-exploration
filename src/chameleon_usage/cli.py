@@ -30,6 +30,14 @@ def parse_args() -> argparse.Namespace:
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
     )
 
+    grant_sql = subparsers.add_parser(
+        "print-grant-sql", help="Print SQL to grant read access"
+    )
+    grant_sql.add_argument("--user", default="usage_exporter", help="MySQL username")
+    grant_sql.add_argument(
+        "--host", default="%", help="MySQL host patterns (default: %%)"
+    )
+
     process = subparsers.add_parser("process")
     process.add_argument(
         "--output",
@@ -78,6 +86,12 @@ def process_site(config: SiteConfig, spec, resample: str):
 def main() -> None:
     args = parse_args()
 
+    if args.command == "print-grant-sql":
+        from chameleon_usage.extract.dump_db import generate_grant_sql
+
+        print(generate_grant_sql(args.user, args.host))
+        return
+
     if args.command == "extract":
         from chameleon_usage.extract.dump_db import dump_to_parquet
 
@@ -104,7 +118,9 @@ def main() -> None:
                 raise SystemExit("Error: --parquet-dir required when not using config")
             dump_to_parquet(db_uri, args.parquet_dir.rstrip("/"))
         else:
-            raise SystemExit("Error: --db-uri, $DATABASE_URI, or --sites-config required")
+            raise SystemExit(
+                "Error: --db-uri, $DATABASE_URI, or --sites-config required"
+            )
         return
 
     if args.command == "process":

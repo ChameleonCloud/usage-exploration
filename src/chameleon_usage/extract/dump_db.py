@@ -41,6 +41,23 @@ TABLES = {
 }
 
 
+def generate_grant_sql(user: str = "usage_exporter", host: str = "%") -> str:
+    """Generate SQL GRANT statements for read access to required tables."""
+    lines = [
+        "-- Grant read access for chameleon-usage extractor",
+        "-- Run as MySQL admin (e.g., root)",
+        "",
+        f"CREATE USER IF NOT EXISTS '{user}'@'{host}' IDENTIFIED BY 'CHANGE_ME';",
+        "",
+    ]
+    for schema, tablenames in TABLES.items():
+        for tablename in tablenames:
+            lines.append(f"GRANT SELECT ON {schema}.{tablename} TO '{user}'@'{host}';")
+        lines.append("")
+    lines.append("FLUSH PRIVILEGES;")
+    return "\n".join(lines)
+
+
 def _connect(db_uri: str) -> ibis.BaseBackend:
     """Connect to database, suppressing timezone warnings."""
     with warnings.catch_warnings():
