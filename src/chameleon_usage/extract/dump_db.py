@@ -1,100 +1,66 @@
 """
 Module: Dumps Openstack Mysql to parquet files.
+
+Supports local paths or object store (s3://, gs://) if s3fs/gcsfs installed.
 """
 
 import os
 import warnings
 
 import ibis
+from ibis.common.exceptions import TableNotFound
 
-from chameleon_usage.config import SiteConfig
-
-TABLES = {
-    "blazar": [
-        # generic
-        "leases",
-        "reservations",
-        # computehost: baremetal and kvm
-        "computehosts",
-        "computehost_extra_capabilities",
-        "computehost_reservations",  # physical:host
-        "instance_reservations",  # flavor:instance
-        "computehost_allocations",
-        # CHI@Edge: Device Model
-        "devices",
-        "device_extra_capabilities",
-        "device_reservations",
-        "device_allocations",
-        # do we need these?
-        # "extra_capabilities", # on edge not kvm?
-        # resource_properties # on kvm but not edge?
-        # "events",
-    ],
-    "nova": [
-        "compute_nodes",
-        "instances",
-        "instance_actions",
-        "instance_actions_events",
-        "instance_faults",
-        "instance_extra",
-        "services",
-    ],
-    "nova_api": [
-        "request_specs",
-        "flavors",
-        "flavor_extra_specs",
-        "flavor_projects",
-    ],
-    "zun": [
-        "compute_node",
-        "container",
-        "container_actions",
-        "container_actions_events",
-        "zun_service",
-    ],
-    "chameleon_usage": [
-        "node_count_cache",
-        "node_event",
-        "node_maintenance",
-        "node_usage",
-        "node_usage_report_cache",
-        "node_project_usage_report_cache",
-    ],
-}
+from chameleon_usage.sources import SOURCE_REGISTRY
 
 
-def _fetch_table(db_conn: ibis.BaseBackend, schemaname: str, tablename: str):
-    return db_conn.table(tablename, database=schemaname).to_polars()
+def _get_tables_to_dump() -> dict[str, list[str]]:
+    """Derive table list from SOURCE_REGISTRY."""
+    tables: dict[str, list[str]] = {}
+    for spec in SOURCE_REGISTRY.values():
+        tables.setdefault(spec.db_schema, []).append(spec.db_table)
+    return tables
 
 
-def _connect_schema(db_uri) -> ibis.BaseBackend:
-    """Wrapper to handle warning on temp DBs."""
+def _connect(db_uri: str) -> ibis.BaseBackend:
+    """Connect to database, suppressing timezone warnings."""
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Unable to set session timezone")
         return ibis.connect(db_uri)
 
 
-def dump_site_to_parquet(config: SiteConfig, force: bool = False) -> dict[str, str]:
-    os.makedirs(config.raw_parquet, exist_ok=True)
-    results = {}
-    for schema, uri in config.db_uris.items():
-        conn = _connect_schema(uri)
-        for table in TABLES.get(schema, []):
-            key = f"{schema}.{table}"
-            output_file = f"{config.raw_parquet}/{schema}.{table}.parquet"
+def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
+    """
+    Dump all tables from SOURCE_REGISTRY to parquet files.
 
-            if os.path.exists(output_file) and not force:
-                results[key] = "SKIP"
-                print(f"  {key}: SKIP (exists)")
-                continue
+    Args:
+        db_uri: Database connection string (mysql://user:pass@host:port)
+        output_path: Local path or object store URL (s3://bucket/path)
+
+    Returns:
+        Dict mapping table key to result string
+    """
+    # Ensure output directory exists (for local paths)
+    if not output_path.startswith(("s3://", "gs://", "az://")):
+        os.makedirs(output_path, exist_ok=True)
+
+    conn = _connect(db_uri)
+    tables = _get_tables_to_dump()
+    results = {}
+
+    for schema, tablenames in tables.items():
+        for tablename in tablenames:
+            key = f"{schema}.{tablename}"
+            output_file = f"{output_path}/{key}.parquet"
 
             try:
-                df = _fetch_table(conn, schema, table)
-                df.write_parquet(output_file)
-                results[key] = str(df.height)
-                print(f"  {key}: {df.height} rows")
-            except Exception as e:
+                table = conn.table(tablename, database=schema)
+                table.to_parquet(output_file)
+
+                num_rows = table.count().execute()
+                results[key] = str(num_rows)
+                print(f"  {key}: {num_rows} rows")
+            except TableNotFound:
                 results[key] = "MISSING"
-                print(f"  {key}: MISSING ({type(e).__name__})")
+                print(f"  {key}: MISSING")
 
     return results

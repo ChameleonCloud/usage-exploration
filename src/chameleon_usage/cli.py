@@ -1,22 +1,16 @@
 import argparse
+import os
 from datetime import datetime
 from pathlib import Path
 
-import polars as pl
-
 from chameleon_usage.config import SiteConfig, load_config
-from chameleon_usage.extract.dump_db import dump_site_to_parquet
-from chameleon_usage.ingest import clamp_hierarchy, load_intervals
-from chameleon_usage.pipeline import run_pipeline
-from chameleon_usage.schemas import PipelineSpec
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--sites-config",
-        required=True,
-        help="Path to sites.yaml",
+        help="Path to sites.yaml (required for process command)",
     )
     parser.add_argument(
         "--site",
@@ -26,16 +20,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--parquet-dir",
         required=True,
-        help="Base path to store or load parquet files.",
+        help="Base path to store or load parquet files. Supports s3://, gs://.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     extract = subparsers.add_parser("extract")
     extract.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing parquet files.",
+        "--db-uri",
+        help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URL.",
     )
 
     process = subparsers.add_parser("process")
@@ -62,7 +55,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def process_site(config: SiteConfig, spec: PipelineSpec, resample: str) -> pl.LazyFrame:
+def process_site(config: SiteConfig, spec, resample: str):
+    """Process a site's data through the pipeline. Requires [pipeline] extras."""
+    import polars as pl
+
+    from chameleon_usage.ingest import clamp_hierarchy, load_intervals
+    from chameleon_usage.pipeline import run_pipeline
+
     intervals = (
         load_intervals(config.raw_parquet, spec.time_range).collect().lazy()
     )  # checkpoint
@@ -79,30 +78,39 @@ def process_site(config: SiteConfig, spec: PipelineSpec, resample: str) -> pl.La
 
 def main() -> None:
     args = parse_args()
-    sites_config = load_config(args.sites_config)
-    site_keys = args.site or list(
-        sites_config.keys()
-    )  # default to all configured sites
 
-    # override parquet dir if cli set.
-    for site_key in site_keys:
-        config = sites_config[site_key]
-        config.raw_parquet = f"{args.parquet_dir}/{site_key}"
+    if args.command == "extract":
+        from chameleon_usage.extract.dump_db import dump_to_parquet
 
-        if args.command == "extract":
-            dump_site_to_parquet(config, force=args.force)
-            return
+        db_uri = args.db_uri or os.environ.get("DATABASE_URL")
+        if not db_uri:
+            raise SystemExit("Error: --db-uri or $DATABASE_URL required for extract")
 
-        if args.command == "process":
-            start = datetime.fromisoformat(args.start_date)
-            end = datetime.fromisoformat(args.end_date)
-            spec = PipelineSpec(
-                group_cols=("metric", "resource", "site", "collector_type"),
-                time_range=(start, end),
-            )
+        dump_to_parquet(db_uri, args.parquet_dir)
+        return
 
-            output_base = Path(args.output)
-            output_base.mkdir(parents=True, exist_ok=True)
+    if args.command == "process":
+        if not args.sites_config:
+            raise SystemExit("Error: --sites-config required for process command")
+
+        from chameleon_usage.schemas import PipelineSpec
+
+        sites_config = load_config(args.sites_config)
+        site_keys = args.site or list(sites_config.keys())
+
+        start = datetime.fromisoformat(args.start_date)
+        end = datetime.fromisoformat(args.end_date)
+        spec = PipelineSpec(
+            group_cols=("metric", "resource", "site", "collector_type"),
+            time_range=(start, end),
+        )
+
+        output_base = Path(args.output)
+        output_base.mkdir(parents=True, exist_ok=True)
+
+        for site_key in site_keys:
+            config = sites_config[site_key]
+            config.raw_parquet = f"{args.parquet_dir}/{site_key}"
 
             usage = process_site(config, spec, args.resample)
 
