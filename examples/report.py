@@ -68,9 +68,7 @@ def main():
     usage = resample(combined, bucket_length, default_spec).collect()
 
     # Pivot to wide for consumption by matplotlib
-    wide = to_wide(usage)
-    print(wide.columns)
-    print(wide.head())
+    wide = to_wide(usage, pivot_cols=["metric", "collector_type"])
 
     for site_name in sites_to_plot:
         plot_stacked_usage(wide, site_name, RT.NODE, "output/plots")
@@ -79,10 +77,9 @@ def main():
     plot_stacked_usage(wide, "kvm_tacc", RT.VCPUS, "output/plots")
     plot_site_comparison(wide, sites_to_plot, RT.NODE, "output/plots")
 
-    _ = [
-        {"type": "legacy_comparison", "site": "chi_tacc", "resource": RT.NODE},
-        {"type": "legacy_comparison", "site": "chi_uc", "resource": RT.NODE},
-    ]
+    # compare collection types to identify gaps
+    plot_collector_comparison(wide, "chi_uc", RT.NODE, "output/plots")
+    plot_collector_comparison(wide, "chi_tacc", RT.NODE, "output/plots")
 
 
 if __name__ == "__main__":

@@ -167,3 +167,40 @@ def add_site_context(
         pl.lit(site).alias("site"),
         pl.lit(collector_type).alias("collector_type"),
     )
+
+
+# =============================================================================
+# OUTPUT TRANSFORMS
+# =============================================================================
+
+
+def combine_cols(df: pl.DataFrame, cols: list[str], sep: str = "_") -> tuple[pl.DataFrame, str]:
+    """Combine columns into a single pivot key."""
+    alias = sep.join(cols)
+    expr = pl.col(cols[0]).cast(pl.Utf8)
+    for c in cols[1:]:
+        expr = expr + pl.lit(sep) + pl.col(c).cast(pl.Utf8)
+    return df.with_columns(expr.alias(alias)), alias
+
+
+def to_wide(
+    df: pl.DataFrame,
+    pivot_cols: list[str] | None = None,
+    index_cols: list[str] | None = None,
+) -> pl.DataFrame:
+    """Pivot long format to wide. Metrics become columns.
+
+    Args:
+        df: Long format with metric/value columns
+        pivot_cols: Columns to pivot on (default: ["metric"])
+        index_cols: Index columns (default: ["timestamp", "site", "resource"])
+    """
+    pivot_cols = pivot_cols or [S.METRIC]
+    index_cols = index_cols or [S.TIMESTAMP, "site", "resource"]
+
+    if len(pivot_cols) > 1:
+        df, pivot_on = combine_cols(df, pivot_cols)
+    else:
+        pivot_on = pivot_cols[0]
+
+    return df.pivot(values=S.VALUE, index=index_cols, on=pivot_on).sort(S.TIMESTAMP).fill_null(0)

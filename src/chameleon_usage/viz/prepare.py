@@ -7,6 +7,7 @@ import polars as pl
 
 from chameleon_usage.constants import QuantityTypes as QT
 from chameleon_usage.constants import SchemaCols as S
+from chameleon_usage.pipeline import to_wide
 from chameleon_usage.viz.matplotlib_plots import (
     LegacyComparisonSeries,
     ResourceSeries,
@@ -18,21 +19,12 @@ from chameleon_usage.viz.matplotlib_plots import (
 
 PlotType = Literal["resource", "site_comparison", "legacy_comparison"]
 
-
-def to_wide(usage: pl.DataFrame) -> pl.DataFrame:
-    """Transform long format to wide format once. Metrics become columns like 'total_current'."""
-    return (
-        usage.with_columns(
-            (pl.col(S.METRIC) + "_" + pl.col("collector_type")).alias("metric_collector")
-        )
-        .pivot(
-            values=S.VALUE,
-            index=[S.TIMESTAMP, "site", "resource"],
-            on="metric_collector",
-        )
-        .sort(S.TIMESTAMP)
-        .fill_null(0)
-    )
+__all__ = [
+    "to_wide",
+    "plot_stacked_usage",
+    "plot_site_comparison",
+    "plot_collector_comparison",
+]
 
 
 def plot_stacked_usage(
@@ -108,9 +100,13 @@ def plot_site_comparison(
     )
 
 
-def plot_collector_comparison(wide: pl.DataFrame, spec: dict, output_dir: Path) -> None:
-    site, resource = spec["site"], spec.get("resource", "node")
-    df = wide.filter(pl.col("site") == site, pl.col("resource") == resource)
+def plot_collector_comparison(
+    wide: pl.DataFrame, site_name: str, resource: str, output_dir: str
+) -> None:
+    df = wide.filter(
+        pl.col("site") == site_name,
+        pl.col("resource") == resource,
+    )
     if df.is_empty():
         return
 
@@ -128,10 +124,10 @@ def plot_collector_comparison(wide: pl.DataFrame, spec: dict, output_dir: Path) 
         legacy_reservable=_col(df, res_leg),
     )
 
-    title = spec.get("title", f"{site} - nodes")
-    filename = spec.get("filename", f"{site}_reservable_compare.png")
+    title = f"{site_name} - nodes"
+    filename = f"{site_name}_reservable_compare.png"
     do_plot_collector_comparison(
-        series, title=title, output_path=str(output_dir / filename)
+        series, title=title, output_path=f"{output_dir}/{filename}"
     )
 
 
