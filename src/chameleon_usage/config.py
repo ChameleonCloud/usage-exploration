@@ -11,7 +11,7 @@ class SiteConfig:
     site_name: str
     adapters: Optional[list[str]] = None
     raw_parquet: Optional[str] = None
-    db_uris: Optional[dict[str, str]] = None
+    db_uri: Optional[str] = None
 
 
 # TODO: kinda messy, use pydantic?

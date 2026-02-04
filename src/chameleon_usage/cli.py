@@ -19,8 +19,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--parquet-dir",
-        required=True,
-        help="Base path to store or load parquet files. Supports s3://, gs://.",
+        help="Local directory or s3://. Overrides config.raw_parquet if set.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -82,11 +81,30 @@ def main() -> None:
     if args.command == "extract":
         from chameleon_usage.extract.dump_db import dump_to_parquet
 
+        # Priority: --db-uri > config > $DATABASE_URI
         db_uri = args.db_uri or os.environ.get("DATABASE_URI")
-        if not db_uri:
-            raise SystemExit("Error: --db-uri or $DATABASE_URI required for extract")
 
-        dump_to_parquet(db_uri, args.parquet_dir)
+        if args.sites_config:
+            sites_config = load_config(args.sites_config)
+            site_keys = args.site or list(sites_config.keys())
+            for site_key in site_keys:
+                config = sites_config[site_key]
+                site_db_uri = db_uri or config.db_uri
+                if not site_db_uri:
+                    raise SystemExit(f"Error: no db_uri for site {site_key}")
+                # Priority: --parquet-dir > config.raw_parquet
+                output_path = args.parquet_dir or config.raw_parquet
+                if not output_path:
+                    raise SystemExit(f"Error: no output path for site {site_key}")
+                output_path = output_path.rstrip("/")
+                print(f"Extracting {site_key}...")
+                dump_to_parquet(site_db_uri, output_path)
+        elif db_uri:
+            if not args.parquet_dir:
+                raise SystemExit("Error: --parquet-dir required when not using config")
+            dump_to_parquet(db_uri, args.parquet_dir.rstrip("/"))
+        else:
+            raise SystemExit("Error: --db-uri, $DATABASE_URI, or --sites-config required")
         return
 
     if args.command == "process":
@@ -110,7 +128,10 @@ def main() -> None:
 
         for site_key in site_keys:
             config = sites_config[site_key]
-            config.raw_parquet = f"{args.parquet_dir}/{site_key}"
+            if args.parquet_dir:
+                config.raw_parquet = args.parquet_dir.rstrip("/")
+            if not config.raw_parquet:
+                raise SystemExit(f"Error: no raw_parquet for site {site_key}")
 
             usage = process_site(config, spec, args.resample)
 
