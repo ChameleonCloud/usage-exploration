@@ -29,6 +29,10 @@ class Tables:
     BLAZAR_DEVICE_EXTRA_CAPABILITIES = "blazar_device_extra_capabilities"
     BLAZAR_DEVICE_RESERVATIONS = "blazar_device_reservations"
     BLAZAR_DEVICES = "blazar_devices"
+    # Chi@Edge (Zun)
+    ZUN_CONTAINERS = "zun_containers"
+    ZUN_CONTAINER_ACTIONS = "zun_container_actions"
+    ZUN_CONTAINER_ACTION_EVENTS = "zun_container_action_events"
 
 
 SOURCE_REGISTRY = {
@@ -62,4 +66,12 @@ SOURCE_REGISTRY = {
         "blazar", "device_reservations", raw.BlazarDeviceReservationRaw
     ),
     Tables.BLAZAR_DEVICES: SourceSpec("blazar", "devices", raw.BlazarDeviceRaw),
+    # Chi@Edge (Zun)
+    Tables.ZUN_CONTAINERS: SourceSpec("zun", "container", raw.ZunContainerRaw),
+    Tables.ZUN_CONTAINER_ACTIONS: SourceSpec(
+        "zun", "container_actions", raw.ZunContainerActionsRaw
+    ),
+    Tables.ZUN_CONTAINER_ACTION_EVENTS: SourceSpec(
+        "zun", "container_actions_events", raw.ZunContainerActionsEventsRaw
+    ),
 }

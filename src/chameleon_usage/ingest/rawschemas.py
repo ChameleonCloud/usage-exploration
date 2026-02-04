@@ -144,45 +144,49 @@ class ZunComputeNodeRaw(BaseRaw):
     """Not super useful for chi@edge, just one for whole k3s cluster."""
 
     created_at: pl.Datetime = pa.Field(coerce=True)
-    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
     uuid: str
     hostname: str
 
 
 class ZunContainerRaw(BaseRaw):
     created_at: pl.Datetime = pa.Field(coerce=True)
-    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
     id: int = pa.Field(coerce=True)
     uuid: str
     name: str
-    container_id: str
-    hostname: str
-    labels: str
-    status_reason: str
-    host: str
-    status_detail: str
+    status: str
+    container_id: str = pa.Field(nullable=True)
+    hostname: str = pa.Field(nullable=True)
+    labels: str = pa.Field(nullable=True)
+    status_reason: str = pa.Field(nullable=True)
+    host: str = pa.Field(nullable=True)
+    status_detail: str = pa.Field(nullable=True)
     started_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    cpu: float = pa.Field(coerce=True)
+    memory: float = pa.Field(coerce=True)
+    disk: int = pa.Field(coerce=True)
 
 
 class ZunContainerActionsRaw(BaseRaw):
     created_at: pl.Datetime = pa.Field(coerce=True)
-    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
     id: int = pa.Field(coerce=True)
     action: str
     container_uuid: str
-    start_time: pl.Datetime = pa.Field(coerce=True)
+    start_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
     finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
 
 
 class ZunContainerActionsEventsRaw(BaseRaw):
     created_at: pl.Datetime = pa.Field(coerce=True)
-    deleted_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
+    updated_at: pl.Datetime = pa.Field(coerce=True, nullable=True)
     id: int = pa.Field(coerce=True)
     event: str
     action_id: int = pa.Field(coerce=True)
-    start_time: pl.Datetime = pa.Field(coerce=True)
+    start_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
     finish_time: pl.Datetime = pa.Field(coerce=True, nullable=True)
-    result: str
+    result: str = pa.Field(nullable=True)
 
 
 class BlazarDeviceAllocationRaw(BaseRaw):

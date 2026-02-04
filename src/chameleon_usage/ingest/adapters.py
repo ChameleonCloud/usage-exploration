@@ -308,3 +308,23 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             "host_created_at",
         )
     )
+
+
+# Terminal container statuses (container is no longer running)
+ZUN_TERMINAL_STATUSES = ["Deleted", "Error", "Stopped"]
+
+
+def zun_containers_source(tables: RawTables) -> pl.LazyFrame:
+    """Load Zun containers for chi@edge.
+
+    Uses started_at as start (containers that never started are filtered out).
+    End time is updated_at when status is terminal, else null (ongoing).
+    """
+    containers = tables[Tables.ZUN_CONTAINERS]
+
+    is_terminal = pl.col("status").is_in(ZUN_TERMINAL_STATUSES)
+
+    return containers.filter(pl.col("started_at").is_not_null()).with_columns(
+        pl.col("started_at").alias("created_at"),
+        pl.when(is_terminal).then(pl.col("updated_at")).alias("deleted_at"),
+    )
