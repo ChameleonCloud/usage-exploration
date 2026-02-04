@@ -59,7 +59,7 @@ OPS_PROJECT_IDS: set[str] = set(
 
 def main():
     path = "data/current/chi_edge"
-    time_range = (datetime(2022, 3, 1), datetime(2025, 1, 1))
+    time_range = (datetime(2022, 3, 1), datetime(2025, 11, 1))
     bucket_length = "7d"
 
     project_ids = load_project_ids("etc/edge_projects.json")
