@@ -1,11 +1,7 @@
-# Chameleon Usage Reporting 2026
+# Chameleon Usage Reporting
 
-Library and pipeline to reconstruct historical openstack usage metrics.
-
-Primary features:
-- Archive source data: extract data from production DBs or other sources and archive to parquet files.
-- Process source data containing timestamps and unique identifiers into timeline of usage over time.
-- Plotting and analysis methods for usage over time results.
+Reconstruct historical OpenStack capacity and usage from source databases.
+Write outputs to local disk or S3-compatible object storage (`s3://...`).
 
 ## Installation
 
@@ -13,7 +9,7 @@ Primary features:
 # Core (extract only)
 pip install chameleon-usage
 
-# With S3/Ceph support
+# With S3-compatible object storage support (AWS S3, Ceph RGW, MinIO)
 pip install chameleon-usage[s3]
 
 # With pipeline processing
@@ -23,150 +19,97 @@ pip install chameleon-usage[pipeline]
 pip install chameleon-usage[all]
 ```
 
-## Usage
+## Quickstart
 
-### Database Setup
-
-Generate SQL to grant read access to required tables:
+1. Generate read-only SQL grants:
 
 ```bash
 chameleon-usage print-grant-sql
-chameleon-usage print-grant-sql --user myuser --host '10.0.0.%'
+chameleon-usage print-grant-sql --user usage_exporter --host '10.0.0.%'
 ```
 
-This requires admin access to set the permissions, but afterwards only the 
-read-only user will be used to fetch data.
+This is a one-time setup step per DB/user. The command only prints SQL.
+Have a DB admin run that SQL (as root/admin) to create the extractor user and grant
+read-only table access. After that, extraction can run with that least-privilege user.
 
-### Extract: Database to Parquet
+2. Create `etc/site.yml`:
 
-Extract dumps tables from a MySQL database to parquet files.
+```yaml
+chi_uc:
+  site_name: "CHI@UC"
+  db_uri: "mysql://user:pass@host:3306"
+  data_dir: "s3://usage-new-collector/chi_uc"
+```
 
-**To local directory:**
+3. Extract source tables:
+
 ```bash
-chameleon-usage --data-dir ./data extract --db-uri mysql://user:pass@host:3306
+chameleon-usage --config etc/site.yml --site chi_uc extract
 ```
 
-**To S3 or Ceph RGW:**
-```bash
-# Set credentials via environment
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_ENDPOINT_URL=https://rgw.example.com:8080  # for Ceph RGW
-
-chameleon-usage --data-dir s3://bucket/path extract --db-uri mysql://user:pass@host:3306
-```
-
-**Using environment variable for database:**
-```bash
-export DATABASE_URI=mysql://user:pass@host:3306
-chameleon-usage --data-dir ./data extract
-```
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URI` | Database URI (fallback if `--db-uri` not provided) |
-| `AWS_ACCESS_KEY_ID` | S3/Ceph access key |
-| `AWS_SECRET_ACCESS_KEY` | S3/Ceph secret key |
-| `AWS_ENDPOINT_URL` | Custom S3 endpoint (for Ceph RGW, MinIO, etc.) |
-| `AWS_REGION` | AWS region (optional) |
-
-Docker note: when using `docker run --env-file`, do not quote values in the env file.
-Use `AWS_ENDPOINT_URL=https://...`, not `AWS_ENDPOINT_URL="https://..."`.
-
-### Process: Parquet to Usage Metrics
-
-Process extracted data into usage metrics. Requires `[pipeline]` extras.
+4. Process extracted spans into usage:
 
 ```bash
 chameleon-usage \
   --config etc/site.yml \
-  --data-dir data/raw_spans \
-  --site chi_tacc --site chi_uc \
+  --site chi_uc \
   process \
   --output output/usage \
-  --start-date 2015-01-01 \
-  --end-date 2026-01-01
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31
 ```
 
-Optional: add `--resample 7d` to bucket results before writing.
+## CLI
 
-**Using config file:**
-```bash
-chameleon-usage --config etc/site.yml extract
-chameleon-usage --config etc/site.yml --site chi_tacc extract
-```
+`extract`
+- Dumps configured DB tables to parquet under `data_dir`.
+- Required inputs: `--db-uri` or `$DATABASE_URI` or `config.db_uri`, and a data path from `--data-dir` or `config.data_dir`.
 
-Example `etc/site.yml`:
-```yaml
-chi_tacc:
-  site_name: "CHI@TACC"
-  db_uri: "mysql://user:pass@host:3306"
-  data_dir: "s3://bucket/chi_tacc"
-  # db_uri can be omitted if using $DATABASE_URI env var
+`process`
+- Loads raw span parquet and writes usage parquet by site.
+- Requires `chameleon-usage[pipeline]`.
 
-chi_uc:
-  site_name: "CHI@UC"
-  db_uri: "mysql://user:pass@host:3306"
-  data_dir: "s3://bucket/chi_uc"
-```
+`print-grant-sql`
+- Prints SQL grants needed by the extractor user.
 
-**Mixing config with env vars (recommended for secrets):**
-```bash
-# Config has paths, env has credentials
-export DATABASE_URI=mysql://user:pass@host:3306
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
+Shared flags:
+- `--config`: path to `etc/site.yml`
+- `--site`: repeatable site keys
+- `--data-dir`: overrides `config.data_dir`
 
-chameleon-usage --config etc/site.yml --site chi_tacc extract
-```
-
-Priority order:
+Priority:
 - `--db-uri` > `$DATABASE_URI` > `config.db_uri`
 - `--data-dir` > `config.data_dir`
 
-See [examples/report.py](examples/report.py) for a complete example with plotting.
+## Environment Variables
 
+| Variable | Description |
+|---|---|
+| `DATABASE_URI` | Database URI fallback when `--db-uri` is not passed |
+| `AWS_ACCESS_KEY_ID` | Access key for S3-compatible object storage |
+| `AWS_SECRET_ACCESS_KEY` | Secret key for S3-compatible object storage |
+| `AWS_ENDPOINT_URL` | Endpoint for non-AWS S3 providers (Ceph RGW, MinIO), e.g. `https://host:port` |
+| `AWS_REGION` | Optional AWS region |
 
-## Data Model
+## Output Layout
 
-### Utilization Stack
+Extract output:
+- `<data_dir>/<schema>.<table>.parquet`
 
-Capacity decomposes into **mutually exclusive states** at any point in time:
+Process output:
+- `<output>/<site>/usage.parquet`
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                          TOTAL CAPACITY                            │
-├─────────────────────────────────────┬──────────────────────────────┤
-│             RESERVABLE              │           ONDEMAND           │
-├─────────────────────────┬───────────┼──────────────────┬───────────┤
-│        COMMITTED        │           │                  │           │
-├──────────────────┬──────┤           │     OCCUPIED     │ AVAILABLE │
-│     OCCUPIED     │ IDLE │ AVAILABLE │                  │           │
-├────────┬─────────┤      │           ├────────┬─────────┤           │
-│ ACTIVE │ STOPPED │      │           │ ACTIVE │ STOPPED │           │
-└────────┴─────────┴──────┴───────────┴────────┴─────────┴───────────┘
-```
+## Troubleshooting
 
-### What's Easy
+- Docker `--env-file`: do not quote values.
+- Use `AWS_ENDPOINT_URL=https://...`, not `AWS_ENDPOINT_URL="https://..."`.
+- Endpoint hosts must be valid DNS labels.
+- If using S3-compatible storage, hyphenated bucket names are safer than underscore names.
+- Missing or unauthorized tables are reported and extraction continues.
 
-1. Most data is stored as soft-deleted rows, with created_at, deleted_at, and a unique ID.
-2. Each "usage state" above corresponds to a particular openstack entity, with unique ids.
-   1. "total capacity" is "all nova hypervisors that existed at time T.
-   2. "reservable" is "all blazar hosts that existed at time T."
-   3. "committed" -> blazar allocations in an active lease
-   4. Active and Stopped -> Nova instances by state, and if they had a blazar reservation_id or not
-3. Converting these "spans" to total capacity and usage over time is mechanically straightforward:
-   1. each openstack entity has a unique identifer we can join on
-   2. grouping by "type, cumulative sum produces counts for each type for every timestamp 
-   3. data is small enough to fit into ram
-   4. we only need to downsample for plotting
+## Examples
 
-### What's Hard
+- `examples/report.py`
+- `examples/report_edge.py`
 
-1. Some data we want doesn't exist in the live DB. Columns like "maintenance" refer to state "now", and historial state isn't available.
-2. Some data is missing: some historical nova hosts and blazar hosts are not in the DB, primarily pre-2018
-3. We may have multiple data sources that disagree:
-   1. what if a nova instance has deleted_at after the blazar allocation ends?
-   2. what if we import a backup for historical data, and it has conflicting records?
+For development workflow, tests, linting, and PR expectations, see `CONTRIBUTING.md`.
