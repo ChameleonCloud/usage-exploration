@@ -333,8 +333,9 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             .otherwise(pl.lit("reservation"))
             .alias("booking_type"),
             pl.coalesce("node", "last_host").alias("node"),
-            # Use launched_at as start time (rename to created_at for adapter)
-            pl.col("launched_at").alias("created_at"),
+            # some instances occupy resources during BUILD, may have long time between created_at and launched_at
+            # use created_at directly, commenting out below override.
+            # pl.col("launched_at").alias("created_at"),
             # End = min of table values and event-derived (handles both KVM and baremetal)
             pl.min_horizontal(
                 "terminated_at", "deleted_at", "event_terminated_at"
