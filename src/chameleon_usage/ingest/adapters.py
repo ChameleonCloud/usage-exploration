@@ -272,6 +272,23 @@ def _nova_host_resources(tables: RawTables) -> pl.LazyFrame:
     )
 
 
+def _earliest_host_resources(tables: RawTables) -> pl.LazyFrame:
+    """Earliest host record per node - fallback for instances before first host record."""
+    return (
+        tables[Tables.NOVA_HOSTS]
+        .sort("created_at")
+        .group_by("hypervisor_hostname")
+        .first()
+        .select(
+            pl.col("hypervisor_hostname").alias("node"),
+            pl.col("hypervisor_type").alias("_fb_hypervisor_type"),
+            pl.col("vcpus").alias("_fb_host_vcpus"),
+            pl.col("memory_mb").alias("_fb_host_memory_mb"),
+            pl.col("local_gb").alias("_fb_host_disk_gb"),
+        )
+    )
+
+
 def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
     """Load instances with blazar reservation_id and recovered host from events.
 
@@ -302,6 +319,7 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
     last_host = _last_host(tables)
     event_terminated = _terminated_at(tables)
     host_resources = _nova_host_resources(tables)
+    earliest_hosts = _earliest_host_resources(tables)
 
     return (
         instances.filter(pl.col("launched_at").is_not_null())  # skip never-launched
@@ -330,6 +348,16 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             by="node",
             strategy="backward",
         )
+        # Fallback: use earliest host record when join_asof fails (instance before first host record)
+        .join(earliest_hosts, on="node", how="left")
+        .with_columns(
+            pl.coalesce("hypervisor_type", "_fb_hypervisor_type").alias(
+                "hypervisor_type"
+            ),
+            pl.coalesce("host_vcpus", "_fb_host_vcpus").alias("host_vcpus"),
+            pl.coalesce("host_memory_mb", "_fb_host_memory_mb").alias("host_memory_mb"),
+            pl.coalesce("host_disk_gb", "_fb_host_disk_gb").alias("host_disk_gb"),
+        )
         .drop(
             "res_hint",
             "res_flavor",
@@ -338,6 +366,10 @@ def nova_instances_source(tables: RawTables) -> pl.LazyFrame:
             "event_terminated_at",
             "launched_at",
             "host_created_at",
+            "_fb_hypervisor_type",
+            "_fb_host_vcpus",
+            "_fb_host_memory_mb",
+            "_fb_host_disk_gb",
         )
     )
 
