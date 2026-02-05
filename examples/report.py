@@ -42,14 +42,14 @@ def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
 
 
 def main():
-    time_range = (datetime(2015, 1, 1), datetime(2026, 1, 1))
+    time_range = (datetime(2022, 1, 1), datetime(2026, 1, 1))
 
     default_spec = PipelineSpec(
         group_cols=("metric", "resource", "site", "collector_type"),
         time_range=time_range,
     )
 
-    bucket_length = "1d"
+    bucket_length = "30d"
 
     sites_to_plot = ["chi_uc", "chi_tacc", "kvm_tacc"]
 
@@ -68,16 +68,67 @@ def main():
     # Pivot to wide for consumption by matplotlib
     wide = to_wide(usage, pivot_cols=["metric", "collector_type"])
 
-    for site_name in sites_to_plot:
-        plot_stacked_usage(wide, site_name, RT.NODE, "output/plots")
-
-    # extra vcpu plot for kvm
-    plot_stacked_usage(wide, "kvm_tacc", RT.VCPUS, "output/plots")
+    # CHI sites: exclude on-demand (not applicable)
+    plot_stacked_usage(
+        wide,
+        "chi_uc",
+        RT.NODE,
+        "output/plots",
+        include_ondemand=False,
+        title="CHI@UC Node Usage over Time",
+        y_label="Nodes",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
+    plot_stacked_usage(
+        wide,
+        "chi_tacc",
+        RT.NODE,
+        "output/plots",
+        include_ondemand=False,
+        title="CHI@TACC Node Usage over Time",
+        y_label="Nodes",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
+    # KVM: include on-demand
+    plot_stacked_usage(
+        wide,
+        "kvm_tacc",
+        RT.NODE,
+        "output/plots",
+        title="KVM@TACC Node Usage over Time",
+        y_label="Nodes (Normalized)",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
+    plot_stacked_usage(
+        wide,
+        "kvm_tacc",
+        RT.VCPUS,
+        "output/plots",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
     plot_site_comparison(wide, sites_to_plot, RT.NODE, "output/plots")
 
     # compare collection types to identify gaps
-    plot_collector_comparison(wide, "chi_uc", RT.NODE, "output/plots")
-    plot_collector_comparison(wide, "chi_tacc", RT.NODE, "output/plots")
+    plot_collector_comparison(
+        wide,
+        "chi_uc",
+        RT.NODE,
+        "output/plots",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
+    plot_collector_comparison(
+        wide,
+        "chi_tacc",
+        RT.NODE,
+        "output/plots",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
 
 
 if __name__ == "__main__":

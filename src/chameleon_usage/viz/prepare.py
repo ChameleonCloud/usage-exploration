@@ -28,20 +28,22 @@ class C:
 
 # Visual styles: column → (color, label)
 STYLES = {
-    C.OCCUPIED_RESERVATION: ("#2ca02c", "Active (Reserved)"),
-    C.OCCUPIED_ONDEMAND: ("#98df8a", "Active (On-demand)"),
-    C.IDLE: ("#1f77b4", "Idle (Reserved)"),
-    C.AVAILABLE: ("#aec7e8", "Available"),
-    C.AVAILABLE_RESERVABLE: ("#17becf", "Available (Reservable)"),
-    C.AVAILABLE_ONDEMAND: ("#aec7e8", "Available (On-demand)"),
+    C.OCCUPIED_RESERVATION: ("#2ca02c", "In Use (Reserved)"),
+    C.OCCUPIED_ONDEMAND: ("#98df8a", "In Use (On-demand)"),
+    C.IDLE: ("#1f77b4", "Reserved"),
+    C.AVAILABLE: ("#aec7e8", "Idle"),
+    C.AVAILABLE_RESERVABLE: ("#17becf", "Idle (Reservable)"),
+    C.AVAILABLE_ONDEMAND: ("#aec7e8", "Idle (On-demand)"),
     C.TOTAL: ("#333333", "Total"),
-    C.RESERVABLE: ("#333333", "Reservable"),
-    C.RESERVABLE_LEGACY: ("#1f77b4", "Legacy Reservable"),
+    C.RESERVABLE: ("#3333339A", "Reservable Pool"),
+    C.RESERVABLE_LEGACY: ("#1f77b4", "Usable"),
 }
 
 UTIL_AREA_COLS = [C.OCCUPIED_RESERVATION, C.OCCUPIED_ONDEMAND, C.IDLE]
 LINE_COLS = [C.TOTAL, C.RESERVABLE, C.RESERVABLE_LEGACY]
 SITE_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+# Lighter versions for "available" areas
+SITE_COLORS_LIGHT = ["#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5"]
 
 
 def _filter(wide: pl.DataFrame, site: str, resource: str) -> pl.DataFrame:
@@ -68,39 +70,101 @@ def _line(df: pl.DataFrame, col: str, **kwargs) -> LineLayer:
     return LineLayer(_col(df, col), color, label, **kwargs)
 
 
+DENOM_COLS = {
+    "total": C.TOTAL,
+    "reservable": C.RESERVABLE,
+    "reservable_legacy": C.RESERVABLE_LEGACY,
+}
+
+
+def _make_filename(
+    output_dir: str,
+    site_name: str,
+    resource: str,
+    suffix: str,
+    time_range: tuple | None = None,
+    bucket: str | None = None,
+) -> str:
+    parts = [site_name, resource]
+    if time_range:
+        start, end = time_range
+        parts.append(f"{start:%Y%m%d}-{end:%Y%m%d}")
+    if bucket:
+        parts.append(bucket)
+    parts.append(suffix)
+    return f"{output_dir}/{'_'.join(parts)}.png"
+
+
 def plot_stacked_usage(
-    wide: pl.DataFrame, site_name: str, resource: str, output_dir: str
+    wide: pl.DataFrame,
+    site_name: str,
+    resource: str,
+    output_dir: str,
+    include_ondemand: bool = True,
+    pct_denom: str | None = None,
+    title: str | None = None,
+    y_label: str | None = None,
+    time_range: tuple | None = None,
+    bucket: str | None = None,
 ) -> None:
     df = _filter(wide, site_name, resource)
     if df.is_empty():
         return
 
     x = df.get_column(S.TIMESTAMP).to_list()
-    available = _sum(_col(df, C.AVAILABLE_RESERVABLE), _col(df, C.AVAILABLE_ONDEMAND))
+    # Default denominator: "total" for on-demand sites, "reservable" for reservation-only
+    if pct_denom is None:
+        pct_denom = "total" if include_ondemand else "reservable"
+    denom_col = DENOM_COLS.get(pct_denom, C.RESERVABLE)
+    denom_values = _col(df, denom_col)
 
-    areas = [_area(df, col) for col in UTIL_AREA_COLS]
+    if include_ondemand:
+        area_cols = UTIL_AREA_COLS
+        available = _sum(
+            _col(df, C.AVAILABLE_RESERVABLE), _col(df, C.AVAILABLE_ONDEMAND)
+        )
+        areas = [_area(df, col) for col in area_cols]
+        lines = [
+            _line(df, C.TOTAL, zorder=10),
+            _line(df, C.RESERVABLE, linestyle="--", zorder=9),
+        ]
+    else:
+        area_cols = [c for c in UTIL_AREA_COLS if c != C.OCCUPIED_ONDEMAND]
+        available = _col(df, C.AVAILABLE_RESERVABLE)
+        # Simplified labels without "(Reserved)" suffix
+        areas = []
+        for col in area_cols:
+            color, label = STYLES[col]
+            if col == C.OCCUPIED_RESERVATION:
+                label = "In Use"
+            areas.append(AreaLayer(_col(df, col), color, label))
+        # Single "Total" line using reservable
+        lines = [LineLayer(_col(df, C.RESERVABLE), "#333333", "Total", zorder=10)]
+
     color, label = STYLES[C.AVAILABLE]
     areas.append(AreaLayer(available, color, label))
-
-    lines = [
-        _line(df, C.TOTAL, zorder=10),
-        _line(df, C.RESERVABLE, linestyle="--", zorder=9),
-    ]
 
     plot_stacked_step_with_pct(
         x,
         areas,
         lines,
-        title=f"{site_name} - {resource}",
-        y_label=resource,
-        output_path=f"{output_dir}/{site_name}_{resource}_util.png",
+        title=title or f"{site_name} - {resource}",
+        y_label=y_label or resource,
+        denom_values=denom_values,
+        output_path=_make_filename(
+            output_dir, site_name, resource, "util", time_range, bucket
+        ),
     )
+
+
+SITE_LABELS = {"chi_uc": "CHI@UC", "chi_tacc": "CHI@TACC", "kvm_tacc": "KVM@TACC"}
 
 
 def plot_site_comparison(
     wide: pl.DataFrame, site_names: list[str], resource: str, output_dir: str
 ) -> None:
-    site_stacks: list[tuple[str, list[AreaLayer]]] = []
+    used_areas: list[AreaLayer] = []
+    available_areas: list[AreaLayer] = []
     total_values: list[float] = []
 
     for i, site in enumerate(site_names):
@@ -108,18 +172,34 @@ def plot_site_comparison(
         if df.is_empty():
             continue
 
-        occupied = _sum(_col(df, C.COMMITTED), _col(df, C.OCCUPIED_ONDEMAND))
-        capacity = _col(df, C.TOTAL)
+        # Used = occupied + idle (committed resources)
+        used = _sum(
+            _col(df, C.OCCUPIED_RESERVATION),
+            _sum(_col(df, C.OCCUPIED_ONDEMAND), _col(df, C.IDLE)),
+        )
+        # Available = available_reservable + available_ondemand
+        if site.startswith("kvm"):
+            available = _sum(
+                _col(df, C.AVAILABLE_RESERVABLE), _col(df, C.AVAILABLE_ONDEMAND)
+            )
+        else:
+            available = _col(df, C.AVAILABLE_RESERVABLE)
+
+        # For CHI sites use reservable (total can be erroneously high), for KVM use total
+        capacity_col = C.TOTAL if site.startswith("kvm") else C.RESERVABLE
+        capacity = _col(df, capacity_col)
         color = SITE_COLORS[i % len(SITE_COLORS)]
+        available_color = SITE_COLORS_LIGHT[i % len(SITE_COLORS_LIGHT)]
+        label = SITE_LABELS.get(site, site)
 
         if not total_values:
             total_values = [0.0] * len(capacity)
         total_values = _sum(total_values, capacity)
 
-        area = AreaLayer(occupied, color, f"{site} (used)")
-        site_stacks.append((site, [area]))
+        used_areas.append(AreaLayer(used, color, label))
+        available_areas.append(AreaLayer(available, available_color, label))
 
-    if not site_stacks:
+    if not used_areas:
         return
 
     x = _filter(wide, site_names[0], resource).get_column(S.TIMESTAMP).to_list()
@@ -128,7 +208,8 @@ def plot_site_comparison(
 
     plot_multi_site_stacked(
         x,
-        site_stacks,
+        used_areas,
+        available_areas,
         total_line,
         title=f"Utilization by Site - {resource}",
         output_path=f"{output_dir}/sites_{resource}_comparison.png",
@@ -136,7 +217,12 @@ def plot_site_comparison(
 
 
 def plot_collector_comparison(
-    wide: pl.DataFrame, site_name: str, resource: str, output_dir: str
+    wide: pl.DataFrame,
+    site_name: str,
+    resource: str,
+    output_dir: str,
+    time_range: tuple | None = None,
+    bucket: str | None = None,
 ) -> None:
     df = _filter(wide, site_name, resource)
     if df.is_empty():
@@ -148,7 +234,13 @@ def plot_collector_comparison(
 
     x = df.get_column(S.TIMESTAMP).to_list()
     lines = [
-        _line(df, col, linewidth=2.5 if i == 0 else 2, zorder=10 - i)
+        _line(
+            df,
+            col,
+            linewidth=1,
+            zorder=10 - i,
+            linestyle="--" if col == C.RESERVABLE else "-",
+        )
         for i, col in enumerate(LINE_COLS)
     ]
 
@@ -159,6 +251,8 @@ def plot_collector_comparison(
         lines,
         title=f"{site_name} - {resource}: Collector Comparison",
         y_label=resource,
-        diff_labels=("Legacy > Nova", "Nova > Legacy"),
-        output_path=f"{output_dir}/{site_name}_{resource}_collector_compare.png",
+        diff_labels=("Missing History", "Maintenance (untracked)"),
+        output_path=_make_filename(
+            output_dir, site_name, resource, "collector_compare", time_range, bucket
+        ),
     )
