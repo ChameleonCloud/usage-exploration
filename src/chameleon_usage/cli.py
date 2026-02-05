@@ -1,30 +1,43 @@
 import argparse
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
 
 from chameleon_usage.config import SiteConfig, load_config
 
+logger = logging.getLogger(__name__)
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+
+def _add_shared_args(
+    parser: argparse.ArgumentParser, default: object | None = None
+) -> None:
     parser.add_argument(
-        "--sites-config",
-        help="Path to sites.yaml (required for process command)",
+        "--config",
+        help="Path to etc/site.yml (required for process command)",
+        default=default,
     )
     parser.add_argument(
         "--site",
         action="append",
-        help="Site key from sites.yaml (repeatable). Defaults to all sites.",
+        help="Site key from etc/site.yml (repeatable). Defaults to all sites.",
+        default=default,
     )
     parser.add_argument(
-        "--parquet-dir",
-        help="Local directory or s3://. Overrides config.raw_parquet if set.",
+        "--data-dir",
+        help="Local directory or s3://. Overrides config.data_dir if set.",
+        default=default,
     )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    _add_shared_args(parser)
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     extract = subparsers.add_parser("extract")
+    _add_shared_args(extract, default=argparse.SUPPRESS)
     extract.add_argument(
         "--db-uri",
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
@@ -39,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     process = subparsers.add_parser("process")
+    _add_shared_args(process, default=argparse.SUPPRESS)
     process.add_argument(
         "--output",
         required=True,
@@ -69,9 +83,11 @@ def process_site(config: SiteConfig, spec, resample: str):
     from chameleon_usage.ingest import clamp_hierarchy, load_intervals
     from chameleon_usage.pipeline import run_pipeline
 
-    intervals = (
-        load_intervals(config.raw_parquet, spec.time_range).collect().lazy()
-    )  # checkpoint
+    data_dir = config.data_dir
+    if data_dir is None:
+        raise SystemExit(f"Error: no data_dir for site {config.key}")
+
+    intervals = load_intervals(data_dir, spec.time_range).collect().lazy()  # checkpoint
     clamped = clamp_hierarchy(intervals).collect().lazy()  # checkpoint
 
     valid = clamped.filter(pl.col("valid"))
@@ -84,52 +100,51 @@ def process_site(config: SiteConfig, spec, resample: str):
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args()
 
     if args.command == "print-grant-sql":
         from chameleon_usage.extract.dump_db import generate_grant_sql
 
-        print(generate_grant_sql(args.user, args.host))
+        logger.info("%s", generate_grant_sql(args.user, args.host))
         return
 
     if args.command == "extract":
         from chameleon_usage.extract.dump_db import dump_to_parquet
 
-        # Priority: --db-uri > config > $DATABASE_URI
+        # Priority: --db-uri > $DATABASE_URI > config.db_uri
         db_uri = args.db_uri or os.environ.get("DATABASE_URI")
 
-        if args.sites_config:
-            sites_config = load_config(args.sites_config)
+        if args.config:
+            sites_config = load_config(args.config)
             site_keys = args.site or list(sites_config.keys())
             for site_key in site_keys:
                 config = sites_config[site_key]
                 site_db_uri = db_uri or config.db_uri
                 if not site_db_uri:
                     raise SystemExit(f"Error: no db_uri for site {site_key}")
-                # Priority: --parquet-dir > config.raw_parquet
-                output_path = args.parquet_dir or config.raw_parquet
+                # Priority: --data-dir > config.data_dir
+                output_path = args.data_dir or config.data_dir
                 if not output_path:
                     raise SystemExit(f"Error: no output path for site {site_key}")
                 output_path = output_path.rstrip("/")
-                print(f"Extracting {site_key}...")
+                logger.info("Extracting %s...", site_key)
                 dump_to_parquet(site_db_uri, output_path)
         elif db_uri:
-            if not args.parquet_dir:
-                raise SystemExit("Error: --parquet-dir required when not using config")
-            dump_to_parquet(db_uri, args.parquet_dir.rstrip("/"))
+            if not args.data_dir:
+                raise SystemExit("Error: --data-dir required when not using --config")
+            dump_to_parquet(db_uri, args.data_dir.rstrip("/"))
         else:
-            raise SystemExit(
-                "Error: --db-uri, $DATABASE_URI, or --sites-config required"
-            )
+            raise SystemExit("Error: --db-uri, $DATABASE_URI, or --config required")
         return
 
     if args.command == "process":
-        if not args.sites_config:
-            raise SystemExit("Error: --sites-config required for process command")
+        if not args.config:
+            raise SystemExit("Error: --config required for process command")
 
         from chameleon_usage.schemas import PipelineSpec
 
-        sites_config = load_config(args.sites_config)
+        sites_config = load_config(args.config)
         site_keys = args.site or list(sites_config.keys())
 
         start = datetime.fromisoformat(args.start_date)
@@ -144,10 +159,10 @@ def main() -> None:
 
         for site_key in site_keys:
             config = sites_config[site_key]
-            if args.parquet_dir:
-                config.raw_parquet = args.parquet_dir.rstrip("/")
-            if not config.raw_parquet:
-                raise SystemExit(f"Error: no raw_parquet for site {site_key}")
+            if args.data_dir:
+                config.data_dir = args.data_dir.rstrip("/")
+            if not config.data_dir:
+                raise SystemExit(f"Error: no data_dir for site {site_key}")
 
             usage = process_site(config, spec, args.resample)
 

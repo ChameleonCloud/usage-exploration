@@ -43,7 +43,7 @@ Extract dumps tables from a MySQL database to parquet files.
 
 **To local directory:**
 ```bash
-chameleon-usage --parquet-dir ./data extract --db-uri mysql://user:pass@host:3306
+chameleon-usage --data-dir ./data extract --db-uri mysql://user:pass@host:3306
 ```
 
 **To S3 or Ceph RGW:**
@@ -53,13 +53,13 @@ export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_ENDPOINT_URL=https://rgw.example.com:8080  # for Ceph RGW
 
-chameleon-usage --parquet-dir s3://bucket/path extract --db-uri mysql://user:pass@host:3306
+chameleon-usage --data-dir s3://bucket/path extract --db-uri mysql://user:pass@host:3306
 ```
 
 **Using environment variable for database:**
 ```bash
 export DATABASE_URI=mysql://user:pass@host:3306
-chameleon-usage --parquet-dir ./data extract
+chameleon-usage --data-dir ./data extract
 ```
 
 ### Environment Variables
@@ -72,14 +72,17 @@ chameleon-usage --parquet-dir ./data extract
 | `AWS_ENDPOINT_URL` | Custom S3 endpoint (for Ceph RGW, MinIO, etc.) |
 | `AWS_REGION` | AWS region (optional) |
 
+Docker note: when using `docker run --env-file`, do not quote values in the env file.
+Use `AWS_ENDPOINT_URL=https://...`, not `AWS_ENDPOINT_URL="https://..."`.
+
 ### Process: Parquet to Usage Metrics
 
 Process extracted data into usage metrics. Requires `[pipeline]` extras.
 
 ```bash
 chameleon-usage \
-  --sites-config etc/sites.yaml \
-  --parquet-dir data/raw_spans \
+  --config etc/site.yml \
+  --data-dir data/raw_spans \
   --site chi_tacc --site chi_uc \
   process \
   --output output/usage \
@@ -91,20 +94,22 @@ Optional: add `--resample 7d` to bucket results before writing.
 
 **Using config file:**
 ```bash
-chameleon-usage --sites-config etc/sites.yaml extract
-chameleon-usage --sites-config etc/sites.yaml --site chi_tacc extract
+chameleon-usage --config etc/site.yml extract
+chameleon-usage --config etc/site.yml --site chi_tacc extract
 ```
 
-Example `etc/sites.yaml`:
+Example `etc/site.yml`:
 ```yaml
 chi_tacc:
   site_name: "CHI@TACC"
-  raw_parquet: "s3://bucket/chi_tacc"
+  db_uri: "mysql://user:pass@host:3306"
+  data_dir: "s3://bucket/chi_tacc"
   # db_uri can be omitted if using $DATABASE_URI env var
 
 chi_uc:
   site_name: "CHI@UC"
-  raw_parquet: "s3://bucket/chi_uc"
+  db_uri: "mysql://user:pass@host:3306"
+  data_dir: "s3://bucket/chi_uc"
 ```
 
 **Mixing config with env vars (recommended for secrets):**
@@ -114,12 +119,12 @@ export DATABASE_URI=mysql://user:pass@host:3306
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 
-chameleon-usage --sites-config etc/sites.yaml --site chi_tacc extract
+chameleon-usage --config etc/site.yml --site chi_tacc extract
 ```
 
 Priority order:
 - `--db-uri` > `$DATABASE_URI` > `config.db_uri`
-- `--parquet-dir` > `config.raw_parquet`
+- `--data-dir` > `config.data_dir`
 
 See [examples/report.py](examples/report.py) for a complete example with plotting.
 

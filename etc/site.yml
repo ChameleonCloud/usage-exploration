@@ -1,0 +1,43 @@
+# Site database configurations
+
+chi_tacc:
+  site_name: "CHI@TACC"
+  db_uri: "mysql://root:root@127.0.0.1:3307"
+  data_dir: "data/raw/chi_tacc"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
+    - legacy_usage
+
+chi_uc:
+  site_name: "CHI@UC"
+  db_uri: "mysql://root:root@127.0.0.1:3309"
+  data_dir: "data/raw/chi_uc"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
+    - legacy_usage
+
+kvm_tacc:
+  site_name: "KVM@TACC"
+  db_uri: "mysql://root:root@127.0.0.1:3308"
+  data_dir: "data/raw/kvm_tacc"
+  adapters:
+    - nova_instances
+    - nova_hosts
+    - blazar_hosts
+    - blazar_allocations
+
+chi_edge:
+  site_name: "CHI@Edge"
+  db_uri: "mysql://root:root@127.0.0.1:3310"
+  data_dir: "data/raw/chi_edge"
+  adapters:
+    - zun_containers
+    - zun_hosts
+    - blazar_devices
+    - blazar_device_allocations

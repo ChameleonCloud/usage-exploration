@@ -4,12 +4,16 @@ Module: Dumps Openstack Mysql to parquet files.
 Supports local paths or object store (s3://, gs://) if s3fs/gcsfs installed.
 """
 
+import logging
 import os
 import warnings
 
 import ibis
 from ibis.backends.mysql import MySQLdb
 from ibis.common.exceptions import TableNotFound
+
+logger = logging.getLogger(__name__)
+TABLE_FLIP = "(╯°□°)╯︵ ┻━┻"
 
 # Tables to dump, grouped by schema.
 # Keep in sync with sources.SOURCE_REGISTRY if adding new tables.
@@ -83,6 +87,7 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
 
     conn = _connect(db_uri)
     results = {}
+    logger.info("Extracting tables to %s", output_path)
 
     for schema, tablenames in TABLES.items():
         for tablename in tablenames:
@@ -95,10 +100,10 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
 
                 num_rows = table.count().execute()
                 results[key] = str(num_rows)
-                print(f"  {key}: {num_rows} rows")
+                logger.info("  %s %s: %s rows", TABLE_FLIP, key, num_rows)
             except TableNotFound:
                 results[key] = "MISSING"
-                print(f"  {key}: MISSING")
+                logger.info("  %s %s: MISSING", TABLE_FLIP, key)
             except MySQLdb.OperationalError as exc:
                 code = exc.args[0] if exc.args else None
                 if code in (2002, 2003):
@@ -112,7 +117,7 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
                 else:
                     status = "OPERATIONAL_ERROR"
                 results[key] = status
-                print(f"  {key}: {status} ({exc})")
+                logger.info("  %s %s: %s (%s)", TABLE_FLIP, key, status, exc)
             except MySQLdb.ProgrammingError as exc:
                 code = exc.args[0] if exc.args else None
                 if code == 1146:
@@ -124,6 +129,6 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
                 else:
                     status = "PROGRAMMING_ERROR"
                 results[key] = status
-                print(f"  {key}: {status} ({exc})")
+                logger.info("  %s %s: %s (%s)", TABLE_FLIP, key, status, exc)
 
     return results

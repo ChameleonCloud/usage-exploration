@@ -10,7 +10,7 @@ class SiteConfig:
     key: str
     site_name: str
     adapters: Optional[list[str]] = None
-    raw_parquet: Optional[str] = None
+    data_dir: Optional[str] = None
     db_uri: Optional[str] = None
 
 
@@ -20,6 +20,8 @@ def load_config(path: str | Path) -> dict[str, SiteConfig]:
     sites: dict[str, SiteConfig] = {}
     for key, value in data.items():
         payload = dict(value)
+        if "data_dir" not in payload and "raw_parquet" in payload:
+            payload["data_dir"] = payload.pop("raw_parquet")
         payload["key"] = key
         sites[key] = SiteConfig(**payload)
     return sites
