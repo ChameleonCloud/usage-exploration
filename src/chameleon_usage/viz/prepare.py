@@ -44,6 +44,24 @@ LINE_COLS = [C.TOTAL, C.RESERVABLE, C.RESERVABLE_LEGACY]
 SITE_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
 # Lighter versions for "available" areas
 SITE_COLORS_LIGHT = ["#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5"]
+SITE_ORDER = ["chi_tacc", "chi_uc", "kvm_tacc"]
+SITE_STYLE = {
+    "chi_tacc": {
+        "used_color": "#1f77b4",
+        "available_color": "#aec7e8",
+        "label": "CHI@TACC",
+    },
+    "chi_uc": {
+        "used_color": "#ff7f0e",
+        "available_color": "#ffbb78",
+        "label": "CHI@UC",
+    },
+    "kvm_tacc": {
+        "used_color": "#2ca02c",
+        "available_color": "#98df8a",
+        "label": "KVM@TACC",
+    },
+}
 
 
 def _filter(wide: pl.DataFrame, site: str, resource: str) -> pl.DataFrame:
@@ -157,20 +175,31 @@ def plot_stacked_usage(
     )
 
 
-SITE_LABELS = {"chi_uc": "CHI@UC", "chi_tacc": "CHI@TACC", "kvm_tacc": "KVM@TACC"}
-
-
 def plot_site_comparison(
     wide: pl.DataFrame, site_names: list[str], resource: str, output_dir: str
 ) -> None:
     used_areas: list[AreaLayer] = []
     available_areas: list[AreaLayer] = []
     total_values: list[float] = []
+    x: list | None = None
 
-    for i, site in enumerate(site_names):
+    site_order_idx = {name: i for i, name in enumerate(SITE_ORDER)}
+    original_idx = {name: i for i, name in enumerate(site_names)}
+    ordered_sites = sorted(
+        site_names,
+        key=lambda name: (
+            site_order_idx.get(name, len(SITE_ORDER)),
+            original_idx[name],
+        ),
+    )
+
+    for i, site in enumerate(ordered_sites):
         df = _filter(wide, site, resource)
         if df.is_empty():
             continue
+
+        if x is None:
+            x = df.get_column(S.TIMESTAMP).to_list()
 
         # Used = occupied + idle (committed resources)
         used = _sum(
@@ -188,30 +217,38 @@ def plot_site_comparison(
         # For CHI sites use reservable (total can be erroneously high), for KVM use total
         capacity_col = C.TOTAL if site.startswith("kvm") else C.RESERVABLE
         capacity = _col(df, capacity_col)
-        color = SITE_COLORS[i % len(SITE_COLORS)]
-        available_color = SITE_COLORS_LIGHT[i % len(SITE_COLORS_LIGHT)]
-        label = SITE_LABELS.get(site, site)
+        style = SITE_STYLE.get(site)
+        color = style["used_color"] if style else SITE_COLORS[i % len(SITE_COLORS)]
+        available_color = (
+            style["available_color"]
+            if style
+            else SITE_COLORS_LIGHT[i % len(SITE_COLORS_LIGHT)]
+        )
+        base_label = style["label"] if style else site
 
         if not total_values:
             total_values = [0.0] * len(capacity)
         total_values = _sum(total_values, capacity)
 
-        used_areas.append(AreaLayer(used, color, label))
-        available_areas.append(AreaLayer(available, available_color, label))
+        used_areas.append(AreaLayer(used, color, base_label))
+        available_areas.append(AreaLayer(available, available_color, base_label))
 
     if not used_areas:
         return
 
-    x = _filter(wide, site_names[0], resource).get_column(S.TIMESTAMP).to_list()
-    color, _ = STYLES[C.TOTAL]
-    total_line = LineLayer(total_values, color, "Total Capacity", zorder=10)
+    if x is None:
+        return
+
+    total_line = LineLayer(
+        total_values, "#000000", "Total Capacity", linewidth=1.5, zorder=10
+    )
 
     plot_multi_site_stacked(
         x,
         used_areas,
         available_areas,
         total_line,
-        title=f"Utilization by Site - {resource}",
+        title="Utilization by Site (Stacked Used + Available)",
         output_path=f"{output_dir}/sites_{resource}_comparison.png",
     )
 

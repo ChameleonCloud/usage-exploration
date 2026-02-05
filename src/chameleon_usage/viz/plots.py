@@ -163,28 +163,52 @@ def plot_multi_site_stacked(
     output_path: str | None = None,
 ) -> Figure:
     set_publication_style()
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(DOUBLE_COL_WIDTH, 4), sharex=True)
+    fig, (ax1, ax2) = plt.subplots(
+        2,
+        1,
+        figsize=(DOUBLE_COL_WIDTH, 4.8),
+        sharex=True,
+        gridspec_kw={"height_ratios": [3, 2], "hspace": 0.2},
+    )
 
     # Stack: all used first, then all available
     all_areas = used_areas + available_areas
 
     _stack_areas(
-        ax1, x, all_areas, alpha=0.9, linewidth=0, edgecolor="none", antialiased=False
+        ax1, x, all_areas, alpha=1.0, linewidth=0, edgecolor="none", antialiased=False
     )
     if total_line:
         _draw_lines(ax1, x, [total_line])
 
-    ax1.set_ylabel("Nodes / Equiv")
+    ax1.set_ylabel("# Nodes")
     ax1.set_title(title)
 
     # Per-site % used in subplot
-    for area in used_areas:
-        ax2.plot(x, area.values, color=area.color, drawstyle="steps-post")
+    total_used = [0.0] * len(x)
+    total_capacity = [0.0] * len(x)
+    for used_area, available_area in zip(used_areas, available_areas):
+        capacity = [u + a for u, a in zip(used_area.values, available_area.values)]
+        pct_used = [
+            (u / c * 100) if c > 0 else 0.0 for u, c in zip(used_area.values, capacity)
+        ]
+        ax2.plot(
+            x,
+            pct_used,
+            color=used_area.color,
+            drawstyle="default",
+            linewidth=2,
+        )
+        total_used = [t + u for t, u in zip(total_used, used_area.values)]
+        total_capacity = [t + c for t, c in zip(total_capacity, capacity)]
 
-    ax2.axhline(y=20, color="gray", linestyle="--", linewidth=0.5)
-    ax2.set_ylabel("% Used")
+    combined_pct = [
+        (u / c * 100) if c > 0 else 0.0 for u, c in zip(total_used, total_capacity)
+    ]
+    ax2.plot(x, combined_pct, color="#000000", linewidth=2)
+    ax2.axhline(y=80, color="gray", linestyle=(0, (4, 4)), linewidth=1.5)
+    ax2.set_ylabel("% Utilized")
     ax2.set_ylim(0, 100)
-    ax2.set_title("% Used by Site")
+    ax2.set_title("% of Capacity Used")
 
     for ax in (ax1, ax2):
         ax.set_xlim(x[0], x[-1])
@@ -193,31 +217,39 @@ def plot_multi_site_stacked(
         ax.grid(True, alpha=0.3)
         sns.despine(ax=ax)
 
-    # Custom 2-row legend: Available row on top, Used row on bottom
-    # matplotlib fills legends column-by-column, so we interleave accordingly
     from matplotlib.patches import Patch
-    avail_label = Patch(facecolor="none", edgecolor="none", label="Available:")
-    used_label = Patch(facecolor="none", edgecolor="none", label="Used:")
 
-    # Interleave: [labels, then site pairs] so columns are (label, site1, site2, site3)
-    handles = [avail_label, used_label]
-    for avail, used in zip(available_areas, used_areas):
-        handles.append(Patch(facecolor=avail.color, label=avail.label))
-        handles.append(Patch(facecolor=used.color, label=used.label))
+    avail_by_site = {area.label: area.color for area in available_areas}
+    used_by_site = {area.label: area.color for area in used_areas}
+    preferred_site_order = ["CHI@UC", "CHI@TACC", "KVM@TACC"]
+    site_order = [
+        site
+        for site in preferred_site_order
+        if site in avail_by_site and site in used_by_site
+    ]
 
-    ncol = len(used_areas) + 1
+    available_row = Patch(facecolor="none", edgecolor="none", label="Available:")
+    used_row = Patch(facecolor="none", edgecolor="none", label="Used:")
+    handles = [available_row, used_row]
+    labels = ["Available:", "Used:"]
+    for site in site_order:
+        handles.extend(
+            [
+                Patch(facecolor=avail_by_site[site], edgecolor="none", label=site),
+                Patch(facecolor=used_by_site[site], edgecolor="none", label=site),
+            ]
+        )
+        labels.extend([site, site])
 
     fig.legend(
         handles,
-        [h.get_label() for h in handles],
+        labels,
         loc="lower center",
-        ncol=ncol,
+        ncol=len(site_order) + 1,
         fontsize="x-small",
         bbox_to_anchor=(0.5, 0.01),
-        handlelength=1.5,
-        columnspacing=1.0,
     )
-    plt.tight_layout(rect=(0, 0.12, 1, 1))
+    fig.subplots_adjust(left=0.08, right=0.995, top=0.93, bottom=0.18)
     _save(fig, output_path)
     return fig
 

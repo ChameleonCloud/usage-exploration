@@ -49,7 +49,7 @@ def main():
         time_range=time_range,
     )
 
-    bucket_length = "30d"
+    bucket_length = "7d"
 
     sites_to_plot = ["chi_uc", "chi_tacc", "kvm_tacc"]
 
