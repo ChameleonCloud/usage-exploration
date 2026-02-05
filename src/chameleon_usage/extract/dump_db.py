@@ -8,6 +8,7 @@ import os
 import warnings
 
 import ibis
+from ibis.backends.mysql import MySQLdb
 from ibis.common.exceptions import TableNotFound
 
 # Tables to dump, grouped by schema.
@@ -98,5 +99,31 @@ def dump_to_parquet(db_uri: str, output_path: str) -> dict[str, str]:
             except TableNotFound:
                 results[key] = "MISSING"
                 print(f"  {key}: MISSING")
+            except MySQLdb.OperationalError as exc:
+                code = exc.args[0] if exc.args else None
+                if code in (2002, 2003):
+                    status = "CONNECTION_ERROR"
+                elif code in (1044, 1045):
+                    status = "AUTH_ERROR"
+                elif code in (1142, 1143):
+                    status = "PERMISSION_ERROR"
+                elif code == 1146:
+                    status = "MISSING"
+                else:
+                    status = "OPERATIONAL_ERROR"
+                results[key] = status
+                print(f"  {key}: {status} ({exc})")
+            except MySQLdb.ProgrammingError as exc:
+                code = exc.args[0] if exc.args else None
+                if code == 1146:
+                    status = "MISSING"
+                elif code in (1044, 1045):
+                    status = "AUTH_ERROR"
+                elif code in (1142, 1143):
+                    status = "PERMISSION_ERROR"
+                else:
+                    status = "PROGRAMMING_ERROR"
+                results[key] = status
+                print(f"  {key}: {status} ({exc})")
 
     return results
