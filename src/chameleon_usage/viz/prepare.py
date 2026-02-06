@@ -5,6 +5,7 @@ from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.viz.plots import (
     AreaLayer,
     LineLayer,
+    PlotAnnotation,
     plot_diff_comparison,
     plot_multi_site_stacked,
     plot_stacked_step_with_pct,
@@ -182,6 +183,7 @@ def plot_site_comparison(
     output_dir: str,
     time_range: tuple | None = None,
     bucket: str | None = None,
+    annotations: list[PlotAnnotation] | None = None,
 ) -> None:
     used_areas: list[AreaLayer] = []
     available_areas: list[AreaLayer] = []
@@ -254,6 +256,7 @@ def plot_site_comparison(
         available_areas,
         total_line,
         title="Utilization by Site (Stacked Used + Available)",
+        annotations=annotations,
         output_path=_make_filename(
             output_dir, "sites", resource, "comparison", time_range, bucket
         ),

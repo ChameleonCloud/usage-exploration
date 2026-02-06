@@ -12,6 +12,7 @@ from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
 from chameleon_usage.pipeline import resample, run_pipeline, to_wide
 from chameleon_usage.schemas import PipelineSpec
+from chameleon_usage.viz.plots import PlotAnnotation
 from chameleon_usage.viz.prepare import (
     plot_collector_comparison,
     plot_site_comparison,
@@ -48,7 +49,7 @@ def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    time_range = (datetime(2022, 1, 1), datetime(2025, 11, 1))
+    time_range = (datetime(2021, 1, 1), datetime(2025, 11, 1))
 
     default_spec = PipelineSpec(
         group_cols=("metric", "resource", "site", "collector_type"),
@@ -131,6 +132,22 @@ def main():
         "output/plots",
         time_range=time_range,
         bucket=bucket_length,
+        annotations=[
+            PlotAnnotation(
+                "UC Phase3",
+                datetime(2022, 2, 10),
+                datetime(2022, 1, 10),
+                120,
+                tip_offset=15,
+            ),
+            PlotAnnotation(
+                "KVM H100",
+                datetime(2025, 9, 1),
+                datetime(2024, 12, 1),
+                90,
+                tip_offset=15,
+            ),
+        ],
     )
 
     # compare collection types to identify gaps

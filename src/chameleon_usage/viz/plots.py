@@ -41,6 +41,15 @@ class LineLayer:
     zorder: int | None = None
 
 
+@dataclass(frozen=True)
+class PlotAnnotation:
+    label: str
+    event_x: object
+    text_x: object
+    y_offset: float = 0.0
+    tip_offset: float = 8.0
+
+
 def _stack_areas(ax: Axes, x: list, areas: list[AreaLayer], **kwargs) -> list[float]:
     """Stack areas on axis, return cumulative total."""
     lower = [0.0] * len(x)
@@ -91,6 +100,35 @@ def _rolling_mean_days(x: list, values: list[float], window_days: int) -> list[f
         else:
             out.append(np.nan)
     return out
+
+
+def _nearest_index(x: list, target_x: object) -> int:
+    x_num = np.asarray(mdates.date2num(x), dtype=float)
+    target_num = float(mdates.date2num(target_x))
+    return int(np.abs(x_num - target_num).argmin())
+
+
+def _draw_annotations(
+    ax: Axes,
+    x: list,
+    total_line: LineLayer,
+    annotations: list[PlotAnnotation],
+) -> None:
+    for annotation in annotations:
+        idx = _nearest_index(x, annotation.event_x)
+        y = total_line.values[idx]
+        ax.annotate(
+            annotation.label,
+            xy=(x[idx], y + annotation.tip_offset),
+            xytext=(annotation.text_x, y + annotation.y_offset),
+            fontsize=10,
+            fontweight="bold",
+            color="black",
+            ha="left",
+            va="bottom",
+            arrowprops={"arrowstyle": "-|>", "lw": 1.8, "color": "black"},
+            annotation_clip=False,
+        )
 
 
 def _setup_time_axis(fig: Figure, *axes: Axes) -> None:
@@ -181,6 +219,7 @@ def plot_multi_site_stacked(
     *,
     title: str,
     smoothing_window_days: int = 30,
+    annotations: list[PlotAnnotation] | None = None,
     output_path: str | None = None,
 ) -> Figure:
     set_publication_style()
@@ -200,6 +239,8 @@ def plot_multi_site_stacked(
     )
     if total_line:
         _draw_lines(ax1, x, [total_line])
+    if total_line and annotations:
+        _draw_annotations(ax1, x, total_line, annotations)
 
     ax1.set_ylabel("# Nodes")
     ax1.set_title(title)
@@ -210,7 +251,8 @@ def plot_multi_site_stacked(
     for used_area, available_area in zip(used_areas, available_areas):
         capacity = [u + a for u, a in zip(used_area.values, available_area.values)]
         pct_used = [
-            (u / c * 100) if c > 0 else np.nan for u, c in zip(used_area.values, capacity)
+            (u / c * 100) if c > 0 else np.nan
+            for u, c in zip(used_area.values, capacity)
         ]
         pct_used = _rolling_mean_days(x, pct_used, smoothing_window_days)
         ax2.plot(
