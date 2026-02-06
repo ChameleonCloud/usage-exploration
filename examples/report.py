@@ -1,11 +1,13 @@
 """Generate usage reports for all sites."""
 
+import logging
 from datetime import datetime
 
 import polars as pl
 
 from chameleon_usage.constants import CollectorTypes as CT
 from chameleon_usage.constants import ResourceTypes as RT
+from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
 from chameleon_usage.ingest import clamp_hierarchy, load_intervals
 from chameleon_usage.ingest.legacyusage import get_legacy_usage_counts
 from chameleon_usage.pipeline import resample, run_pipeline, to_wide
@@ -16,11 +18,14 @@ from chameleon_usage.viz.prepare import (
     plot_stacked_usage,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _process_new_collector(site_name, pipeline_spec: PipelineSpec):
     time_range = pipeline_spec.time_range
 
-    path = f"data/current/{site_name}"
+    path = f"s3://usage_new_collector/{site_name}"
+    # path = f"data/current/{site_name}"
 
     intervals = load_intervals(path, time_range).collect().lazy()
     preprocessed = clamp_hierarchy(intervals).collect().lazy()
@@ -42,6 +47,7 @@ def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     time_range = (datetime(2022, 1, 1), datetime(2026, 1, 1))
 
     default_spec = PipelineSpec(
@@ -58,8 +64,16 @@ def main():
 
     # for each site, load intervals, compute usage timeline, and combine
     for site in sites_to_plot:
-        results.append(_process_new_collector(site, default_spec))
+        try:
+            results.append(_process_new_collector(site, default_spec))
+        except RawTableLoadError as exc:
+            log_raw_table_load_error(logger, site, exc)
+            exit(1)
         results.append(_process_current_collector(site, default_spec))
+
+    if not results:
+        logger.error("No data loaded; exiting.")
+        return
     combined = pl.concat(results).lazy()
 
     # resample results to align timestamps and reduce length
