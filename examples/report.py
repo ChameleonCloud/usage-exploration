@@ -48,14 +48,14 @@ def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    time_range = (datetime(2022, 1, 1), datetime(2026, 1, 1))
+    time_range = (datetime(2022, 1, 1), datetime(2025, 11, 1))
 
     default_spec = PipelineSpec(
         group_cols=("metric", "resource", "site", "collector_type"),
         time_range=time_range,
     )
 
-    bucket_length = "7d"
+    bucket_length = "1d"
 
     sites_to_plot = ["chi_uc", "chi_tacc", "kvm_tacc"]
 
@@ -124,7 +124,14 @@ def main():
         time_range=time_range,
         bucket=bucket_length,
     )
-    plot_site_comparison(wide, sites_to_plot, RT.NODE, "output/plots")
+    plot_site_comparison(
+        wide,
+        sites_to_plot,
+        RT.NODE,
+        "output/plots",
+        time_range=time_range,
+        bucket=bucket_length,
+    )
 
     # compare collection types to identify gaps
     plot_collector_comparison(

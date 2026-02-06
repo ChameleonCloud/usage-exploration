@@ -176,7 +176,12 @@ def plot_stacked_usage(
 
 
 def plot_site_comparison(
-    wide: pl.DataFrame, site_names: list[str], resource: str, output_dir: str
+    wide: pl.DataFrame,
+    site_names: list[str],
+    resource: str,
+    output_dir: str,
+    time_range: tuple | None = None,
+    bucket: str | None = None,
 ) -> None:
     used_areas: list[AreaLayer] = []
     available_areas: list[AreaLayer] = []
@@ -249,7 +254,9 @@ def plot_site_comparison(
         available_areas,
         total_line,
         title="Utilization by Site (Stacked Used + Available)",
-        output_path=f"{output_dir}/sites_{resource}_comparison.png",
+        output_path=_make_filename(
+            output_dir, "sites", resource, "comparison", time_range, bucket
+        ),
     )
 
 

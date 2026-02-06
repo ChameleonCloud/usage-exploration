@@ -1,3 +1,4 @@
+from collections import deque
 from dataclasses import dataclass
 
 import matplotlib.dates as mdates
@@ -71,6 +72,25 @@ def _draw_lines(ax: Axes, x: list, lines: list[LineLayer] | None) -> None:
         if line.linewidth is not None:
             kwargs["linewidth"] = line.linewidth
         ax.plot(x, line.values, **kwargs)
+
+
+def _rolling_mean_days(x: list, values: list[float], window_days: int) -> list[float]:
+    x_days = mdates.date2num(x)
+    out: list[float] = []
+    window: deque[tuple[float, float]] = deque()
+    total = 0.0
+    for t_day, value in zip(x_days, values):
+        while window and (t_day - window[0][0]) > window_days:
+            _, old_value = window.popleft()
+            total -= old_value
+        is_finite = np.isfinite(value)
+        if is_finite:
+            window.append((t_day, value))
+            total += value
+            out.append(total / len(window))
+        else:
+            out.append(np.nan)
+    return out
 
 
 def _setup_time_axis(fig: Figure, *axes: Axes) -> None:
@@ -160,6 +180,7 @@ def plot_multi_site_stacked(
     total_line: LineLayer | None = None,
     *,
     title: str,
+    smoothing_window_days: int = 30,
     output_path: str | None = None,
 ) -> Figure:
     set_publication_style()
@@ -189,8 +210,9 @@ def plot_multi_site_stacked(
     for used_area, available_area in zip(used_areas, available_areas):
         capacity = [u + a for u, a in zip(used_area.values, available_area.values)]
         pct_used = [
-            (u / c * 100) if c > 0 else 0.0 for u, c in zip(used_area.values, capacity)
+            (u / c * 100) if c > 0 else np.nan for u, c in zip(used_area.values, capacity)
         ]
+        pct_used = _rolling_mean_days(x, pct_used, smoothing_window_days)
         ax2.plot(
             x,
             pct_used,
@@ -202,8 +224,9 @@ def plot_multi_site_stacked(
         total_capacity = [t + c for t, c in zip(total_capacity, capacity)]
 
     combined_pct = [
-        (u / c * 100) if c > 0 else 0.0 for u, c in zip(total_used, total_capacity)
+        (u / c * 100) if c > 0 else np.nan for u, c in zip(total_used, total_capacity)
     ]
+    combined_pct = _rolling_mean_days(x, combined_pct, smoothing_window_days)
     ax2.plot(x, combined_pct, color="#000000", linewidth=2)
     ax2.axhline(y=80, color="gray", linestyle=(0, (4, 4)), linewidth=1.5)
     ax2.set_ylabel("% Utilized")
