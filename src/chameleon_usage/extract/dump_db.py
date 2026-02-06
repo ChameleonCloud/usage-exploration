@@ -43,6 +43,14 @@ TABLES = {
         "container_actions",
         "container_actions_events",
     ],
+    "chameleon_usage": [
+        "node_usage_report_cache",
+        "node_count_cache",
+        "node_usage",
+        "node_event",
+        "node_maintenance",
+        "node_project_usage_report_cache",
+    ],
 }
 
 
