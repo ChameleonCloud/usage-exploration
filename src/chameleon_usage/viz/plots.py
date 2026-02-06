@@ -230,7 +230,8 @@ def plot_multi_site_stacked(
     ax2.plot(x, combined_pct, color="#000000", linewidth=2)
     ax2.axhline(y=80, color="gray", linestyle=(0, (4, 4)), linewidth=1.5)
     ax2.set_ylabel("% Utilized")
-    ax2.set_ylim(0, 100)
+    ax2.set_ylim(0, 120)
+    ax2.set_yticks([0, 20, 40, 60, 80, 100, 120])
     ax2.set_title("% of Capacity Used")
 
     for ax in (ax1, ax2):
@@ -240,6 +241,7 @@ def plot_multi_site_stacked(
         ax.grid(True, alpha=0.3)
         sns.despine(ax=ax)
 
+    from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
 
     avail_by_site = {area.label: area.color for area in available_areas}
@@ -253,8 +255,26 @@ def plot_multi_site_stacked(
 
     available_row = Patch(facecolor="none", edgecolor="none", label="Available:")
     used_row = Patch(facecolor="none", edgecolor="none", label="Used:")
-    handles = [available_row, used_row]
-    labels = ["Available:", "Used:"]
+    handles: list = []
+    labels: list[str] = []
+
+    if total_line:
+        handles.extend(
+            [
+                Line2D(
+                    [],
+                    [],
+                    color=total_line.color,
+                    linestyle=total_line.linestyle,
+                    linewidth=total_line.linewidth or plt.rcParams["lines.linewidth"],
+                ),
+                Line2D([], [], color="none", linewidth=0),
+            ]
+        )
+        labels.extend([total_line.label, ""])
+
+    handles.extend([available_row, used_row])
+    labels.extend(["Available:", "Used:"])
     for site in site_order:
         handles.extend(
             [
@@ -268,11 +288,11 @@ def plot_multi_site_stacked(
         handles,
         labels,
         loc="lower center",
-        ncol=len(site_order) + 1,
+        ncol=len(site_order) + 2,
         fontsize="x-small",
         bbox_to_anchor=(0.5, 0.01),
     )
-    fig.subplots_adjust(left=0.08, right=0.995, top=0.93, bottom=0.18)
+    fig.subplots_adjust(left=0.08, right=0.995, top=0.93, bottom=0.2)
     _save(fig, output_path)
     return fig
 
