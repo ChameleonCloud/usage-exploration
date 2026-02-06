@@ -142,6 +142,10 @@ def main() -> None:
         if not args.config:
             raise SystemExit("Error: --config required for process command")
 
+        from chameleon_usage.exceptions import (
+            RawTableLoadError,
+            log_raw_table_load_error,
+        )
         from chameleon_usage.schemas import PipelineSpec
 
         sites_config = load_config(args.config)
@@ -164,7 +168,14 @@ def main() -> None:
             if not config.data_dir:
                 raise SystemExit(f"Error: no data_dir for site {site_key}")
 
-            usage = process_site(config, spec, args.resample)
+            try:
+                usage = process_site(config, spec, args.resample)
+            except RawTableLoadError as exc:
+                log_raw_table_load_error(logger, site_key, exc)
+                continue
+            except Exception:
+                logger.exception("[%s] unhandled exception", site_key)
+                raise
 
             output_dir = output_base / site_key
             output_dir.mkdir(parents=True, exist_ok=True)
