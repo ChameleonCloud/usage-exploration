@@ -1,7 +1,18 @@
 # Chameleon Usage Reporting
 
-Reconstruct historical OpenStack capacity and usage from source databases.
-Write outputs to local disk or S3-compatible object storage (`s3://...`).
+This repo packages tooling to generate resource usage timelines from data in OpenStack service databases.
+
+Its goal is to provide reliable capacity/utilization reporting over time, avoid 
+dependence on brittle, hard to debug SQL statements, and standardize on 
+intermediate representations for intervals and timelines that can be easily 
+used in notebooks, dashboards, and periodic reporting.
+
+## What You Get
+
+- Easy to deploy and configure tool to fetch raw tables from one or more OpenStack DBs.
+- Reusable and extensible pipeline to accommodate additional sources and output formats
+- Auditable data in parquet format: raw tables, normalized intervals, and output timelines
+- Example scripts and notebooks illustrating an end-to-end analysis pipeline.
 
 ## Installation
 
@@ -21,45 +32,105 @@ pip install chameleon-usage[all]
 
 ## Quickstart
 
-1. Generate read-only SQL grants:
+This quickstart runs through collecting data, processing it, and viewing results, locally, against a single OpenStack site.
+
+### Set up Access
+
+This tool only needs read-only privileges, and only to specific tables.
+The following command shows how to create a SQL user and set these permissions, 
+and outputs a series of SQL commands to run manually, setting up this least-privilege user.
 
 ```bash
-chameleon-usage print-grant-sql
-chameleon-usage print-grant-sql --user usage_exporter --host '10.0.0.%'
+chameleon-usage print-grant-sql --user ccusage
 ```
 
-This is a one-time setup step per DB/user. The command only prints SQL.
-Have a DB admin run that SQL (as root/admin) to create the extractor user and grant
-read-only table access. After that, extraction can run with that least-privilege user.
+Example, generated for user `ccusage` and default host `%`
+```sql
+-- Grant read access for chameleon-usage extractor
+-- Run as MySQL admin (e.g., root)
 
-2. Create `etc/site.yml`:
+CREATE USER IF NOT EXISTS 'ccusage'@'%' IDENTIFIED BY 'CHANGE_ME';
+
+-- Minimal Tables needed for "total" and "used" capacity.
+GRANT SELECT ON nova.compute_nodes TO 'ccusage'@'%';
+GRANT SELECT ON nova.instances TO 'ccusage'@'%';
+
+-- Used to gather data about nova instance lifecycle
+GRANT SELECT ON nova.instance_actions TO 'ccusage'@'%';
+GRANT SELECT ON nova.instance_actions_events TO 'ccusage'@'%';
+
+-- Used to look up Flavor and Scheduler hints info for Instances
+GRANT SELECT ON nova_api.request_specs TO 'ccusage'@'%';
+
+-- Used for Blazar Physical:Host reservations
+GRANT SELECT ON blazar.leases TO 'ccusage'@'%';
+GRANT SELECT ON blazar.reservations TO 'ccusage'@'%';
+GRANT SELECT ON blazar.computehost_allocations TO 'ccusage'@'%';
+GRANT SELECT ON blazar.computehosts TO 'ccusage'@'%';
+-- Used for Blazar Flavor:Instance reservations
+GRANT SELECT ON blazar.instance_reservations TO 'ccusage'@'%';
+
+-- Used for CHI@Edge reservable containers
+GRANT SELECT ON blazar.devices TO 'ccusage'@'%';
+GRANT SELECT ON blazar.device_allocations TO 'ccusage'@'%';
+GRANT SELECT ON blazar.device_extra_capabilities TO 'ccusage'@'%';
+GRANT SELECT ON blazar.device_reservations TO 'ccusage'@'%';
+
+GRANT SELECT ON zun.container TO 'ccusage'@'%';
+GRANT SELECT ON zun.container_actions TO 'ccusage'@'%';
+GRANT SELECT ON zun.container_actions_events TO 'ccusage'@'%';
+
+-- Optional, imports cache from other usage reporting tools run by Chameleon
+GRANT SELECT ON chameleon_usage.node_usage_report_cache TO 'ccusage'@'%';
+GRANT SELECT ON chameleon_usage.node_count_cache TO 'ccusage'@'%';
+GRANT SELECT ON chameleon_usage.node_usage TO 'ccusage'@'%';
+GRANT SELECT ON chameleon_usage.node_event TO 'ccusage'@'%';
+GRANT SELECT ON chameleon_usage.node_maintenance TO 'ccusage'@'%';
+GRANT SELECT ON chameleon_usage.node_project_usage_report_cache TO 'ccusage'@'%';
+
+FLUSH PRIVILEGES;
+```
+
+### Configure the exporter
+
+While the exporter can be run using only cli arguments or environment variables,
+we recommend using a simple configuration file. An example is located in this repo
+at `etc/site.yml`
 
 ```yaml
-chi_uc:
-  site_name: "CHI@UC"
-  db_uri: "mysql://user:pass@host:3306"
-  data_dir: "s3://usage-new-collector/chi_uc"
+---
+site_key_name:
+  site_name: "Human Readable Name"
+  # DB connection string, user created above.
+  db_uri: "mysql://ccusage:CHANGE_ME@dbhost:3306"
+  # Directory where raw database exports and intermediate files may be saved.
+  data_dir: "/opt/usage_data/site_key_name"
 ```
 
-3. Extract source tables:
+
+### Running the exporter
+
+The following command uses the provided config to fetch data from the OpenStack DB and write it to file for later analysis.
 
 ```bash
-chameleon-usage --config etc/site.yml --site chi_uc extract
+chameleon-usage --config etc/site.yml --site site_key_name extract
 ```
 
-4. Process extracted spans into usage:
+### Generating the usage timeline
+
+Finally, the `process` command takes the raw data and configuration, and outputs the usage timeline.
 
 ```bash
 chameleon-usage \
   --config etc/site.yml \
-  --site chi_uc \
+  --site site_key_name \
   process \
   --output output/usage \
   --start-date 2024-01-01 \
   --end-date 2024-12-31
 ```
 
-## CLI
+## CLI Details
 
 `extract`
 - Dumps configured DB tables to parquet under `data_dir`.
