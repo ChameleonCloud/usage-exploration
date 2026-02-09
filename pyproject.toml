@@ -12,27 +12,26 @@ dependencies = [
     "ibis-framework[mysql]>=11.0.0",
     "packaging>=24.0",
     "pyyaml>=6.0.3",
+    "pandera[polars]>=0.28.1",
+    "polars>=1.37.1",
 ]
 
 [project.optional-dependencies]
-pipeline = [
+plots = [
     "matplotlib>=3.10.8",
-    "pandera[polars]>=0.28.1",
-    "polars>=1.37.1",
     "seaborn>=0.13.2",
 ]
+
 s3 = [
     "s3fs>=2024.0.0",
 ]
-all = ["chameleon-usage[pipeline,s3]"]
-
-[project.scripts]
-chameleon-usage = "chameleon_usage.cli:main"
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "ruff>=0.14.14",
     "ty>=0.0.14",
 ]
+
+[project.scripts]
+chameleon-usage = "chameleon_usage.cli:main"

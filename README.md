@@ -17,18 +17,37 @@ used in notebooks, dashboards, and periodic reporting.
 ## Installation
 
 ```bash
-# Core (extract only)
+# Core (extract + process)
 pip install chameleon-usage
 
 # With S3-compatible object storage support (AWS S3, Ceph RGW, MinIO)
 pip install chameleon-usage[s3]
 
-# With pipeline processing
-pip install chameleon-usage[pipeline]
+# With plotting support
+pip install chameleon-usage[plots]
 
-# Everything
-pip install chameleon-usage[all]
+# With plotting + S3 support
+pip install "chameleon-usage[plots,s3]"
 ```
+
+### MySQL backend requirements
+
+Core install includes `ibis-framework[mysql]`, which uses `mysqlclient` for DB access.
+If a prebuilt wheel is unavailable for your platform, install MySQL client development
+libraries and a C build toolchain first, then run `pip install chameleon-usage`.
+
+Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config python3-dev default-libmysqlclient-dev
+```
+
+macOS (Homebrew):
+```bash
+brew install mysql pkg-config
+```
+
+As this is only needed for the extract stage, future work will make this dependency optional.
 
 ## Quickstart
 
@@ -138,7 +157,7 @@ chameleon-usage \
 
 `process`
 - Loads raw span parquet and writes usage parquet by site.
-- Requires `chameleon-usage[pipeline]`.
+- Included in core install (`pip install chameleon-usage`).
 
 `print-grant-sql`
 - Prints SQL grants needed by the extractor user.
