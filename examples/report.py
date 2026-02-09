@@ -116,14 +116,20 @@ def main():
         y_label="Nodes (Normalized)",
         time_range=time_range,
         bucket=bucket_length,
+        show_pct=False,
+        merge_reserved=True,
     )
     plot_stacked_usage(
         wide,
         "kvm_tacc",
         RT.VCPUS,
         "output/plots",
+        title="KVM@TACC vCPU Usage over Time",
+        y_label="vCPU",
         time_range=time_range,
         bucket=bucket_length,
+        show_pct=False,
+        merge_reserved=True,
     )
     plot_site_comparison(
         wide,
@@ -133,20 +139,27 @@ def main():
         time_range=time_range,
         bucket=bucket_length,
         annotations=[
+            # PlotAnnotation(
+            #     "UC Phase3",
+            #     datetime(2022, 2, 10),
+            #     datetime(2022, 1, 10),
+            #     120,
+            #     tip_offset=15,
+            # ),
             PlotAnnotation(
-                "UC Phase3",
-                datetime(2022, 2, 10),
-                datetime(2022, 1, 10),
-                120,
-                tip_offset=15,
+                "Haswell Nodes Retired",
+                datetime(2024, 4, 15),
+                datetime(2024, 8, 1),
+                30,
+                tip_offset=0,
             ),
-            PlotAnnotation(
-                "KVM H100",
-                datetime(2025, 9, 1),
-                datetime(2024, 12, 1),
-                90,
-                tip_offset=15,
-            ),
+            # PlotAnnotation(
+            #     "KVM H100",
+            #     datetime(2025, 9, 1),
+            #     datetime(2024, 12, 1),
+            #     90,
+            #     tip_offset=15,
+            # ),
         ],
     )
 
