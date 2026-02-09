@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from pathlib import Path
 
 import polars as pl
 
@@ -61,6 +62,7 @@ def main():
     path = "data/current/chi_edge"
     time_range = (datetime(2022, 3, 1), datetime(2025, 11, 1))
     bucket_length = "7d"
+    output_dir = "output/plots"
 
     project_ids = load_project_ids("etc/edge_projects.json")
 
@@ -96,6 +98,8 @@ def main():
 
     results = run_pipeline(intervals, spec)
     usage = resample(results, bucket_length, spec).collect()
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    usage.write_parquet(f"{output_dir}/chi_edge_usage_timeline.parquet")
 
     # Filter to device data
     devices = usage.filter(pl.col("resource") == RT.DEVICE)
@@ -140,7 +144,7 @@ def main():
         lines=lines,
         title="chi_edge - devices",
         y_label="devices",
-        output_path="output/plots/chi_edge_devices.png",
+        output_path=f"{output_dir}/chi_edge_devices.png",
     )
 
 
