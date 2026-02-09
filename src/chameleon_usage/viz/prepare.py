@@ -29,18 +29,22 @@ class C:
 
 # Visual styles: column → (color, label)
 STYLES = {
-    C.OCCUPIED_RESERVATION: ("#2ca02c", "In Use (Reserved)"),
-    C.OCCUPIED_ONDEMAND: ("#98df8a", "In Use (On-demand)"),
+    C.OCCUPIED_RESERVATION: ("#2DA02D", "In Use (Reserved)"),
+    C.OCCUPIED_ONDEMAND: ("#90EE91", "In Use (On-demand)"),
     C.IDLE: ("#1f77b4", "Reserved"),
-    C.AVAILABLE: ("#aec7e8", "Idle"),
-    C.AVAILABLE_RESERVABLE: ("#17becf", "Idle (Reservable)"),
-    C.AVAILABLE_ONDEMAND: ("#aec7e8", "Idle (On-demand)"),
-    C.TOTAL: ("#333333", "Total"),
-    C.RESERVABLE: ("#3333339A", "Reservable Pool"),
+    C.AVAILABLE: ("#88CEEB", "Idle"),
+    C.AVAILABLE_RESERVABLE: ("#88CEEB", "Idle (Reservable)"),
+    C.AVAILABLE_ONDEMAND: ("#88CEEB", "Idle (On-demand)"),
+    C.TOTAL: ("#494949", "Total"),
+    C.RESERVABLE: ("#6B6F71", "Reservable Pool"),
     C.RESERVABLE_LEGACY: ("#1f77b4", "Usable"),
 }
 
-UTIL_AREA_COLS = [C.OCCUPIED_RESERVATION, C.OCCUPIED_ONDEMAND, C.IDLE]
+UTIL_AREA_COLS = [
+    C.OCCUPIED_ONDEMAND,
+    C.OCCUPIED_RESERVATION,
+    C.IDLE,
+]
 LINE_COLS = [C.TOTAL, C.RESERVABLE, C.RESERVABLE_LEGACY]
 SITE_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
 # Lighter versions for "available" areas
@@ -120,7 +124,9 @@ def plot_stacked_usage(
     resource: str,
     output_dir: str,
     include_ondemand: bool = True,
+    merge_reserved: bool = False,
     pct_denom: str | None = None,
+    show_pct: bool = True,
     title: str | None = None,
     y_label: str | None = None,
     time_range: tuple | None = None,
@@ -138,30 +144,42 @@ def plot_stacked_usage(
     denom_values = _col(df, denom_col)
 
     if include_ondemand:
-        area_cols = UTIL_AREA_COLS
+        area_cols = [c for c in UTIL_AREA_COLS if not (merge_reserved and c == C.IDLE)]
         available = _sum(
             _col(df, C.AVAILABLE_RESERVABLE), _col(df, C.AVAILABLE_ONDEMAND)
         )
-        areas = [_area(df, col) for col in area_cols]
+        areas = []
+        for col in area_cols:
+            values = _col(df, col)
+            if merge_reserved and col == C.OCCUPIED_RESERVATION:
+                values = _sum(values, _col(df, C.IDLE))
+            color, label = STYLES[col]
+            areas.append(AreaLayer(values, color, label))
         lines = [
             _line(df, C.TOTAL, zorder=10),
             _line(df, C.RESERVABLE, linestyle="--", zorder=9),
         ]
     else:
         area_cols = [c for c in UTIL_AREA_COLS if c != C.OCCUPIED_ONDEMAND]
+        if merge_reserved:
+            area_cols = [c for c in area_cols if c != C.IDLE]
         available = _col(df, C.AVAILABLE_RESERVABLE)
-        # Simplified labels without "(Reserved)" suffix
         areas = []
         for col in area_cols:
+            values = _col(df, col)
             color, label = STYLES[col]
             if col == C.OCCUPIED_RESERVATION:
                 label = "In Use"
-            areas.append(AreaLayer(_col(df, col), color, label))
+                if merge_reserved:
+                    values = _sum(values, _col(df, C.IDLE))
+            areas.append(AreaLayer(values, color, label))
         # Single "Total" line using reservable
         lines = [LineLayer(_col(df, C.RESERVABLE), "#333333", "Total", zorder=10)]
 
     color, label = STYLES[C.AVAILABLE]
-    areas.append(AreaLayer(available, color, label))
+    areas.append(
+        AreaLayer(available, color, label, edgecolor="#000000", edgewidth=0.15)
+    )
 
     plot_stacked_step_with_pct(
         x,
@@ -170,6 +188,7 @@ def plot_stacked_usage(
         title=title or f"{site_name} - {resource}",
         y_label=y_label or resource,
         denom_values=denom_values,
+        show_pct=show_pct,
         output_path=_make_filename(
             output_dir, site_name, resource, "util", time_range, bucket
         ),

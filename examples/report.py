@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import polars as pl
 
@@ -50,6 +51,8 @@ def _process_current_collector(site_name, pipeline_spec: PipelineSpec):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     time_range = (datetime(2021, 1, 1), datetime(2025, 11, 1))
+    export_dir = "output/data"
+    plots_dir = "output/plots"
 
     default_spec = PipelineSpec(
         group_cols=("metric", "resource", "site", "collector_type"),
@@ -79,6 +82,10 @@ def main():
 
     # resample results to align timestamps and reduce length
     usage = resample(combined, bucket_length, default_spec).collect()
+    Path(export_dir).mkdir(parents=True, exist_ok=True)
+    usage.write_parquet(f"{export_dir}/usage_timeline.parquet")
+    usage.write_json(f"{export_dir}/usage_timeline.json")
+    usage.write_csv(f"{export_dir}/usage_timeline.csv")
 
     # Pivot to wide for consumption by matplotlib
     wide = to_wide(usage, pivot_cols=["metric", "collector_type"])
@@ -88,7 +95,7 @@ def main():
         wide,
         "chi_uc",
         RT.NODE,
-        "output/plots",
+        plots_dir,
         include_ondemand=False,
         title="CHI@UC Node Usage over Time",
         y_label="Nodes",
@@ -99,7 +106,7 @@ def main():
         wide,
         "chi_tacc",
         RT.NODE,
-        "output/plots",
+        plots_dir,
         include_ondemand=False,
         title="CHI@TACC Node Usage over Time",
         y_label="Nodes",
@@ -111,42 +118,55 @@ def main():
         wide,
         "kvm_tacc",
         RT.NODE,
-        "output/plots",
+        plots_dir,
         title="KVM@TACC Node Usage over Time",
         y_label="Nodes (Normalized)",
         time_range=time_range,
         bucket=bucket_length,
+        show_pct=False,
+        merge_reserved=True,
     )
     plot_stacked_usage(
         wide,
         "kvm_tacc",
         RT.VCPUS,
-        "output/plots",
+        plots_dir,
+        title="KVM@TACC vCPU Usage over Time",
+        y_label="vCPU",
         time_range=time_range,
         bucket=bucket_length,
+        show_pct=False,
+        merge_reserved=True,
     )
     plot_site_comparison(
         wide,
         sites_to_plot,
         RT.NODE,
-        "output/plots",
+        plots_dir,
         time_range=time_range,
         bucket=bucket_length,
         annotations=[
             PlotAnnotation(
-                "UC Phase3",
-                datetime(2022, 2, 10),
+                "UC Phase3 Added",
                 datetime(2022, 1, 10),
-                120,
-                tip_offset=15,
+                datetime(2021, 4, 10),
+                60,
+                tip_offset=5,
             ),
             PlotAnnotation(
-                "KVM H100",
-                datetime(2025, 9, 1),
-                datetime(2024, 12, 1),
-                90,
-                tip_offset=15,
+                "Haswell Nodes Retired",
+                datetime(2024, 4, 15),
+                datetime(2024, 8, 1),
+                30,
+                tip_offset=0,
             ),
+            # PlotAnnotation(
+            #     "KVM H100 Added",
+            #     datetime(2025, 9, 1),
+            #     datetime(2024, 12, 1),
+            #     90,
+            #     tip_offset=15,
+            # ),
         ],
     )
 
@@ -155,7 +175,7 @@ def main():
         wide,
         "chi_uc",
         RT.NODE,
-        "output/plots",
+        plots_dir,
         time_range=time_range,
         bucket=bucket_length,
     )
@@ -163,7 +183,7 @@ def main():
         wide,
         "chi_tacc",
         RT.NODE,
-        "output/plots",
+        plots_dir,
         time_range=time_range,
         bucket=bucket_length,
     )

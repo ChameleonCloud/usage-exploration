@@ -29,6 +29,8 @@ class AreaLayer:
     values: list[float]
     color: str
     label: str
+    edgecolor: str | None = None
+    edgewidth: float | None = None
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,10 @@ def _stack_areas(ax: Axes, x: list, areas: list[AreaLayer], **kwargs) -> list[fl
     """Stack areas on axis, return cumulative total."""
     lower = [0.0] * len(x)
     for area in areas:
-        upper = [lo + val for lo, val in zip(lower, area.values)]
+        upper = [lo + max(0, val) for lo, val in zip(lower, area.values)]
+        edge_kw = {}
+        if area.edgecolor:
+            edge_kw = {"edgecolor": area.edgecolor, "linewidth": area.edgewidth or 0.5}
         ax.fill_between(
             x,
             lower,
@@ -62,7 +67,8 @@ def _stack_areas(ax: Axes, x: list, areas: list[AreaLayer], **kwargs) -> list[fl
             color=area.color,
             label=area.label,
             step="post",
-            alpha=kwargs.get("alpha", 0.8),
+            alpha=kwargs.get("alpha", 1.0),
+            **edge_kw,
             **{k: v for k, v in kwargs.items() if k != "alpha"},
         )
         lower = upper
@@ -164,33 +170,39 @@ def plot_stacked_step_with_pct(
     title: str,
     y_label: str,
     denom_values: list[float] | None = None,
+    show_pct: bool = True,
     output_path: str | None = None,
 ) -> Figure:
     set_publication_style()
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(DOUBLE_COL_WIDTH, 4), sharex=True)
+
+    if show_pct:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(DOUBLE_COL_WIDTH, 4), sharex=True)
+    else:
+        fig, ax1 = plt.subplots(1, 1, figsize=(DOUBLE_COL_WIDTH, 3.5))
 
     stack_total = _stack_areas(ax1, x, areas)
     _draw_lines(ax1, x, lines)
     ax1.set_ylabel(y_label)
-    ax1.set_title(f"{title}: Resource Utilization Over Time")
+    ax1.set_title(title)
 
-    # Percentage subplot - use provided denominator or fall back to stack total
-    raw_denom = denom_values if denom_values is not None else stack_total
-    denom = [v if v != 0 else 1 for v in raw_denom]
-    lower_pct = [0.0] * len(x)
-    for area in areas:
-        pct = [v / d * 100 for v, d in zip(area.values, denom)]
-        upper_pct = [lo + val for lo, val in zip(lower_pct, pct)]
-        ax2.fill_between(
-            x, lower_pct, upper_pct, color=area.color, step="post", alpha=0.8
-        )
-        lower_pct = upper_pct
+    axes = [ax1]
+    if show_pct:
+        raw_denom = denom_values if denom_values is not None else stack_total
+        denom = [v if v != 0 else 1 for v in raw_denom]
+        lower_pct = [0.0] * len(x)
+        for area in areas:
+            pct = [v / d * 100 for v, d in zip(area.values, denom)]
+            upper_pct = [lo + val for lo, val in zip(lower_pct, pct)]
+            ax2.fill_between(
+                x, lower_pct, upper_pct, color=area.color, step="post", alpha=0.8
+            )
+            lower_pct = upper_pct
 
-    ax2.set_ylabel("Percentage (%)")
-    ax2.set_ylim(0, 100)
-    ax2.set_title(f"{title}: Percentage Distribution")
-
-    for ax in (ax1, ax2):
+        ax2.set_ylabel("Percentage (%)")
+        ax2.set_ylim(0, 100)
+        ax2.set_title(f"{title}: Percentage Distribution")
+        axes.append(ax2)
+    for ax in axes:
         ax.set_xlim(x[0], x[-1])
         ax.xaxis.set_major_locator(mdates.YearLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
