@@ -146,13 +146,13 @@ def main():
         time_range=time_range,
         bucket=bucket_length,
         annotations=[
-            # PlotAnnotation(
-            #     "UC Phase3",
-            #     datetime(2022, 2, 10),
-            #     datetime(2022, 1, 10),
-            #     120,
-            #     tip_offset=15,
-            # ),
+            PlotAnnotation(
+                "UC Phase3 Added",
+                datetime(2022, 1, 10),
+                datetime(2021, 4, 10),
+                60,
+                tip_offset=5,
+            ),
             PlotAnnotation(
                 "Haswell Nodes Retired",
                 datetime(2024, 4, 15),
@@ -161,7 +161,7 @@ def main():
                 tip_offset=0,
             ),
             # PlotAnnotation(
-            #     "KVM H100",
+            #     "KVM H100 Added",
             #     datetime(2025, 9, 1),
             #     datetime(2024, 12, 1),
             #     90,
