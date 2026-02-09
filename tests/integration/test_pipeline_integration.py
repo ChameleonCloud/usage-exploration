@@ -54,8 +54,7 @@ def test_clamp_hierarchy_to_pipeline():
         time_range=(datetime(2024, 1, 1), datetime(2024, 1, 5)),
     )
 
-    clamped = clamp_hierarchy(intervals)
-    valid = clamped.filter(pl.col("valid"))
+    valid, invalid = clamp_hierarchy(intervals)
     result = run_pipeline(valid, spec).collect()
 
     assert len(result) > 0

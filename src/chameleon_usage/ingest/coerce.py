@@ -178,7 +178,7 @@ def _add_audit_cols(df: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
+def clamp_hierarchy(intervals: pl.LazyFrame) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     """
     Apply hierarchical temporal clamping: total → reservable → committed → occupied.
 
@@ -218,7 +218,7 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
         join_keys=["blazar_reservation_id", "hypervisor_hostname", S.RESOURCE],
     )
 
-    return pl.concat(
+    output = pl.concat(
         [
             _add_audit_cols(total),
             clamped_reservable,
@@ -228,3 +228,8 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
         ],
         how="diagonal",
     )
+
+    valid = output.filter(pl.col("valid"))
+    invalid = output.filter(~pl.col("valid"))
+
+    return valid, invalid

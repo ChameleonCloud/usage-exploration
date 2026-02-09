@@ -12,7 +12,6 @@ from chameleon_usage.ingest.adapters import (
     blazar_device_allocations_source,
     nova_instances_source,
 )
-from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.ingest.loader import load_raw_tables
 from chameleon_usage.sources import Tables
 
