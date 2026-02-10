@@ -1,60 +1,56 @@
-"""Backwards-compatible output format.
-
-Canonical mutually exclusive states that partition total:
-    total = maintenance + available + idle_reservation + active
-
-Maps from both legacy and current pipeline sources.
-"""
-
+import ibis
 import polars as pl
 
 from chameleon_usage.constants import Metrics as M
+from chameleon_usage.constants import ResourceTypes as RT
+from chameleon_usage.schemas import UsageModel, WideOutput
 
-HOURS_PER_DAY = 24
-
-
-class CanonicalStates:
-    MAINTENANCE = "maintenance"
-    AVAILABLE = "available"
-    IDLE_RESERVATION = "idle_reservation"
-    ACTIVE = "active"
+OUTPUT_DATABASE = "usage_compat"
+OUTPUT_TABLE = "usage_wide"
 
 
-def to_compat_format(df: pl.LazyFrame) -> pl.LazyFrame:
-    """Pipeline output (UsageSchema) → backwards-compatible wide format.
+def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
+    usage: pl.DataFrame = UsageModel.validate(long_df)
 
-    Input: long format with metric in [total, reservable, available, idle, occupied]
-    Output: wide format with canonical states as columns, node_type = "unknown"
-    """
-    wide = (
-        df.filter(
-            pl.col("metric").is_in(
-                [
-                    M.TOTAL,
-                    M.RESERVABLE,
-                    M.AVAILABLE_RESERVABLE,
-                    M.IDLE,
-                    M.OCCUPIED_RESERVATION,
-                ]
-            )
+    pivoted = (
+        usage.filter(
+            (pl.col("collector_type") == "current"),
+            (pl.col("resource") == RT.NODE),
         )
+        .select("timestamp", "site", "metric", "value")
         .group_by(["timestamp", "site", "metric"])
         .agg(pl.col("value").sum())
-        .collect()
         .pivot(on="metric", index=["timestamp", "site"], values="value")
     )
 
-    return wide.select(
-        pl.col("timestamp").alias("date"),
-        pl.col("site"),
-        pl.lit("unknown").alias("node_type"),
-        ((pl.col(M.TOTAL) - pl.col(M.RESERVABLE)) * HOURS_PER_DAY).alias(
-            CanonicalStates.MAINTENANCE
-        ),
-        (pl.col(M.AVAILABLE_RESERVABLE) * HOURS_PER_DAY).alias(
-            CanonicalStates.AVAILABLE
-        ),
-        (pl.col(M.IDLE) * HOURS_PER_DAY).alias(CanonicalStates.IDLE_RESERVATION),
-        (pl.col(M.OCCUPIED_RESERVATION) * HOURS_PER_DAY).alias(CanonicalStates.ACTIVE),
-        (pl.col(M.TOTAL) * HOURS_PER_DAY).alias("total_hours"),
-    ).lazy()
+    wide = (
+        pivoted.select(
+            pl.col("timestamp").alias("time"),
+            pl.col("site"),
+            pl.lit(RT.NODE).alias("resource"),
+            pl.col(M.TOTAL),
+            pl.col(M.RESERVABLE),
+            pl.col(M.COMMITTED),
+            pl.col(M.OCCUPIED_ONDEMAND),
+            pl.col(M.OCCUPIED_RESERVATION).alias("occupied_reserved"),
+            pl.col(M.OCCUPIED_ONDEMAND).alias("active_ondemand"),
+            pl.col(M.OCCUPIED_RESERVATION).alias("active_reserved"),
+        )
+        .sort(["time", "site"])
+        .lazy()
+    )
+
+    return WideOutput.validate(wide).collect()
+
+
+def write_compat_to_db(
+    compat_df: pl.LazyFrame | pl.DataFrame, db_uri: str, overwrite: bool = True
+) -> None:
+    data = compat_df.collect() if isinstance(compat_df, pl.LazyFrame) else compat_df
+    conn = ibis.connect(db_uri)
+    conn.create_table(
+        OUTPUT_TABLE,
+        obj=data,
+        database=OUTPUT_DATABASE,
+        overwrite=overwrite,
+    )

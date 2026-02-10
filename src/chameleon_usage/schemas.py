@@ -84,3 +84,22 @@ class UsageModel(TimelineModel):
 
     site: str
     collector_type: str
+
+
+class WideOutput(pa.DataFrameModel):
+    """Wide output for stacked usage plots."""
+
+    time: pl.Datetime
+    site: str
+    resource: str
+    total: float
+    reservable: float
+    committed: float
+    occupied_ondemand: float
+    occupied_reserved: float
+    active_ondemand: float
+    active_reserved: float
+
+    class Config(BaseConfig):
+        strict = True
+        ordered = True

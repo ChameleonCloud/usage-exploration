@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from chameleon_usage.config import SiteConfig, load_config
+from chameleon_usage.output import compat
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional resample interval (e.g. 1d, 7d).",
     )
 
+    process.add_argument(
+        "--export-uri",
+        help="Optional DB uri to push output data into.",
+    )
+
     return parser.parse_args()
 
 
@@ -139,6 +145,8 @@ def main() -> None:
         return
 
     if args.command == "process":
+        import polars as pl
+
         if not args.config:
             raise SystemExit("Error: --config required for process command")
 
@@ -160,6 +168,7 @@ def main() -> None:
 
         output_base = Path(args.output)
         output_base.mkdir(parents=True, exist_ok=True)
+        usage_frames: list[pl.DataFrame] = []
 
         for site_key in site_keys:
             config = sites_config[site_key]
@@ -169,7 +178,7 @@ def main() -> None:
                 raise SystemExit(f"Error: no data_dir for site {site_key}")
 
             try:
-                usage = process_site(config, spec, args.resample)
+                site_usage = process_site(config, spec, args.resample)
             except RawTableLoadError as exc:
                 log_raw_table_load_error(logger, site_key, exc)
                 continue
@@ -179,7 +188,14 @@ def main() -> None:
 
             output_dir = output_base / site_key
             output_dir.mkdir(parents=True, exist_ok=True)
-            usage.collect().write_parquet(output_dir / "usage.parquet")
+            site_usage_df = site_usage.collect()
+            site_usage_df.write_parquet(output_dir / "usage.parquet")
+            usage_frames.append(site_usage_df)
+
+        if args.export_uri and usage_frames:
+            combined_usage = pl.concat(usage_frames)
+            compat_output = compat.to_compat_format(combined_usage)
+            compat.write_compat_to_db(compat_output, db_uri=args.export_uri)
 
 
 if __name__ == "__main__":
