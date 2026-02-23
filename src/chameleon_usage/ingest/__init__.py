@@ -142,7 +142,8 @@ blazarDeviceReservable = Adapter(
         "name": "device_name",
     },
     resource_cols={
-        ResourceTypes.DEVICE: pl.lit(1),
+        ResourceTypes.NODE: pl.lit(1),
+        # ResourceTypes.DEVICE: pl.lit(1),
     },
 )
 
@@ -161,7 +162,8 @@ blazarDeviceCommitted = Adapter(
     start_col="effective_start",
     end_col="effective_end",
     resource_cols={
-        ResourceTypes.DEVICE: pl.lit(1),
+        ResourceTypes.NODE: pl.lit(1),
+        # ResourceTypes.DEVICE: pl.lit(1),
     },
 )
 
@@ -172,6 +174,8 @@ REGISTRY = AdapterRegistry(
         blazarAllocCommitted,
         novaInstanceOccupiedReservation,
         novaInstanceOccupiedOndemand,
+        blazarDeviceReservable,
+        blazarDeviceCommitted,
     ]
 )
 

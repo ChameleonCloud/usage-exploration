@@ -24,6 +24,8 @@ import polars as pl
 from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import SchemaCols as S
 
+HOST_SCOPED_RESERVATION_TYPES = ("physical:host", "flavor:instance")
+
 # =============================================================================
 # Interval math (pure expressions, no side effects)
 # =============================================================================
@@ -196,14 +198,21 @@ def clamp_hierarchy(intervals: pl.LazyFrame) -> pl.LazyFrame:
 
     # Level 1: reservable → total
     clamped_reservable = apply_temporal_clamp(
-        reservable, parents=total, join_keys=["hypervisor_hostname", S.RESOURCE]
+        reservable,
+        parents=total,
+        join_keys=["hypervisor_hostname", S.RESOURCE],
+        require_parent=pl.col("hypervisor_hostname").is_not_null(),
     )
 
     # Level 2: committed → reservable
+    committed_requires_host_parent = pl.col("reservation_type").is_in(
+        HOST_SCOPED_RESERVATION_TYPES
+    )
     clamped_committed = apply_temporal_clamp(
         committed,
         parents=clamped_reservable,
-        join_keys=["blazar_host_id", S.RESOURCE],
+        join_keys=["blazar_host_id", "hypervisor_hostname", S.RESOURCE],
+        require_parent=committed_requires_host_parent,
     )
 
     # Level 3: occupied_reservation → committed
