@@ -1,9 +1,12 @@
 import ibis
 import polars as pl
+import logging
 
 from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import ResourceTypes as RT
 from chameleon_usage.schemas import UsageModel, WideOutput
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_DATABASE = "usage_compat"
 OUTPUT_TABLE = "usage_wide"
@@ -21,6 +24,43 @@ def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
         .group_by(["timestamp", "site", "metric"])
         .agg(pl.col("value").sum())
         .pivot(on="metric", index=["timestamp", "site"], values="value")
+    )
+
+    # Handle case where columns are totally missing
+    cols = set(pivoted.columns)
+    if M.TOTAL not in cols:
+        pivoted = pivoted.with_columns(pl.col(M.RESERVABLE).alias(M.TOTAL))
+        logger.warning("TOTAL not in columns, setting == RESERVABLE")
+    if M.OCCUPIED_RESERVATION not in cols:
+        pivoted = pivoted.with_columns(
+            pl.col(M.COMMITTED).alias(M.OCCUPIED_RESERVATION)
+        )
+        logger.warning("OCCUPIED_RESERVED not in columns, setting == COMMITTED")
+    if M.OCCUPIED_ONDEMAND not in cols:
+        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.OCCUPIED_ONDEMAND))
+        logger.warning("OCCUPIED_ONDEMAND not in columns, setting == 0")
+
+    # Handle case where columns missing for a specific site
+    site_missing_total = pl.col(M.TOTAL).is_null().all().over("site")
+    site_missing_occ_res = pl.col(M.OCCUPIED_RESERVATION).is_null().all().over("site")
+    site_missing_occ_on = pl.col(M.OCCUPIED_ONDEMAND).is_null().all().over("site")
+
+    pivoted = pivoted.with_columns(
+        # Set total = reservable if missing
+        pl.when(site_missing_total)
+        .then(pl.col(M.RESERVABLE))
+        .otherwise(pl.col(M.TOTAL))
+        .alias(M.TOTAL),
+        # Set occupied reserved = committed if missing
+        pl.when(site_missing_occ_res)
+        .then(pl.col(M.COMMITTED))
+        .otherwise(pl.col(M.OCCUPIED_RESERVATION))
+        .alias(M.OCCUPIED_RESERVATION),
+        # Set occupied ondemand = 0 if missing
+        pl.when(site_missing_occ_on)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col(M.OCCUPIED_ONDEMAND))
+        .alias(M.OCCUPIED_ONDEMAND),
     )
 
     wide = (

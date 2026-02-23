@@ -86,6 +86,7 @@ blazarAllocCommitted = Adapter(
         "id": "blazar_allocation_id",
         "lease_id": "blazar_lease_id",
         "reservation_id": "blazar_reservation_id",
+        "reservation_type": "reservation_type",
         "compute_host_id": "blazar_host_id",
         "hypervisor_hostname": "hypervisor_hostname",
     },
@@ -142,7 +143,8 @@ blazarDeviceReservable = Adapter(
         "name": "device_name",
     },
     resource_cols={
-        ResourceTypes.DEVICE: pl.lit(1),
+        ResourceTypes.NODE: pl.lit(1),
+        # ResourceTypes.DEVICE: pl.lit(1),
     },
 )
 
@@ -154,6 +156,7 @@ blazarDeviceCommitted = Adapter(
         "id": "blazar_allocation_id",
         "lease_id": "blazar_lease_id",
         "reservation_id": "blazar_reservation_id",
+        "reservation_type": "reservation_type",
         "device_id": "blazar_device_id",
         "name": "device_name",
         "project_id": "project_id",
@@ -161,7 +164,8 @@ blazarDeviceCommitted = Adapter(
     start_col="effective_start",
     end_col="effective_end",
     resource_cols={
-        ResourceTypes.DEVICE: pl.lit(1),
+        ResourceTypes.NODE: pl.lit(1),
+        # ResourceTypes.DEVICE: pl.lit(1),
     },
 )
 
@@ -172,6 +176,8 @@ REGISTRY = AdapterRegistry(
         blazarAllocCommitted,
         novaInstanceOccupiedReservation,
         novaInstanceOccupiedOndemand,
+        blazarDeviceReservable,
+        blazarDeviceCommitted,
     ]
 )
 
