@@ -157,6 +157,7 @@ chameleon-usage \
 
 `process`
 - Loads raw span parquet and writes usage parquet by site.
+  Optional DB export uses `--export-uri` or `$EXPORT_URI`.
 - Included in core install (`pip install chameleon-usage`).
 
 `print-grant-sql`
@@ -170,6 +171,7 @@ Shared flags:
 Priority:
 - `--db-uri` > `$DATABASE_URI` > `config.db_uri`
 - `--data-dir` > `config.data_dir`
+- `--export-uri` > `$EXPORT_URI`
 
 ## Environment Variables
 
@@ -180,6 +182,7 @@ Priority:
 | `AWS_SECRET_ACCESS_KEY` | Secret key for S3-compatible object storage |
 | `AWS_ENDPOINT_URL` | Endpoint for non-AWS S3 providers (Ceph RGW, MinIO), e.g. `https://host:port` |
 | `AWS_REGION` | Optional AWS region |
+| `EXPORT_URI` | Process export DB URI fallback when `--export-uri` is not passed |
 
 ## Output Layout
 

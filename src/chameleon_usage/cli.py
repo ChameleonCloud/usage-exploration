@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
 
     process.add_argument(
         "--export-uri",
-        help="Optional DB uri to push output data into.",
+        help="Optional DB URI to push output data into. Falls back to env var EXPORT_URI.",
     )
 
     return parser.parse_args()
@@ -169,6 +169,8 @@ def main() -> None:
         output_base = Path(args.output)
         output_base.mkdir(parents=True, exist_ok=True)
         usage_frames: list[pl.DataFrame] = []
+        # Priority: --export-uri > EXPORT_URI
+        export_uri = args.export_uri or os.environ.get("EXPORT_URI")
 
         for site_key in site_keys:
             config = sites_config[site_key]
@@ -192,10 +194,10 @@ def main() -> None:
             site_usage_df.write_parquet(output_dir / "usage.parquet")
             usage_frames.append(site_usage_df)
 
-        if args.export_uri and usage_frames:
+        if export_uri and usage_frames:
             combined_usage = pl.concat(usage_frames)
             compat_output = compat.to_compat_format(combined_usage)
-            compat.write_compat_to_db(compat_output, db_uri=args.export_uri)
+            compat.write_compat_to_db(compat_output, db_uri=export_uri)
 
 
 if __name__ == "__main__":
