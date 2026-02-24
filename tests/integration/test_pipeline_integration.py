@@ -46,6 +46,7 @@ def test_clamp_hierarchy_to_pipeline():
             "hypervisor_hostname": ["host1"] * 4,
             "blazar_host_id": [None, "blazar1", "blazar1", None],
             "blazar_reservation_id": [None, None, "res1", "res1"],
+            "reservation_type": [None, None, "physical:host", None],
             "booking_type": [None, None, None, "reservation"],
         }
     )
