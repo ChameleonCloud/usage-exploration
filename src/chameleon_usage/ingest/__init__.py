@@ -14,7 +14,6 @@ from chameleon_usage.ingest.adapters import (
     nova_instances_source,
 )
 from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
-from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.ingest.loader import load_raw_tables
 from chameleon_usage.sources import Tables
 

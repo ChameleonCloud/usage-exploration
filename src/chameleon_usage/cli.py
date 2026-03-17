@@ -86,23 +86,20 @@ def process_site(config: SiteConfig, spec, resample: str):
     """Process a site's data through the pipeline. Requires [pipeline] extras."""
     import polars as pl
 
-    from chameleon_usage.ingest import clamp_hierarchy, load_intervals
+    from chameleon_usage.ingest import load_intervals
     from chameleon_usage.pipeline import run_pipeline
 
     data_dir = config.data_dir
     if data_dir is None:
         raise SystemExit(f"Error: no data_dir for site {config.key}")
 
-    intervals = load_intervals(data_dir, spec.time_range).collect().lazy()  # checkpoint
-    clamped = clamp_hierarchy(intervals).collect().lazy()  # checkpoint
+    intervals = load_intervals(data_dir, spec.time_range).collect().lazy()
 
-    valid = clamped.filter(pl.col("valid"))
-
-    cols = set(valid.collect_schema().names())
+    cols = set(intervals.collect_schema().names())
     if "site" not in cols:
-        valid = valid.with_columns(pl.lit(config.key).alias("site"))
+        intervals = intervals.with_columns(pl.lit(config.key).alias("site"))
 
-    return run_pipeline(valid, spec, resample_interval=resample)
+    return run_pipeline(intervals, spec, resample_interval=resample)
 
 
 def main() -> None:
