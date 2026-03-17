@@ -29,6 +29,8 @@ class Tables:
     BLAZAR_DEVICE_EXTRA_CAPABILITIES = "blazar_device_extra_capabilities"
     BLAZAR_DEVICE_RESERVATIONS = "blazar_device_reservations"
     BLAZAR_DEVICES = "blazar_devices"
+    # Audit
+    AUDIT_BLAZAR_HOSTS = "audit_blazar_hosts"
     # Chi@Edge (Zun)
     ZUN_CONTAINERS = "zun_containers"
     ZUN_CONTAINER_ACTIONS = "zun_container_actions"
@@ -66,6 +68,10 @@ SOURCE_REGISTRY = {
         "blazar", "device_reservations", raw.BlazarDeviceReservationRaw
     ),
     Tables.BLAZAR_DEVICES: SourceSpec("blazar", "devices", raw.BlazarDeviceRaw),
+    # Audit
+    Tables.AUDIT_BLAZAR_HOSTS: SourceSpec(
+        "openstack_audit", "audit_blazar_computehosts", raw.AuditRaw
+    ),
     # Chi@Edge (Zun)
     Tables.ZUN_CONTAINERS: SourceSpec("zun", "container", raw.ZunContainerRaw),
     Tables.ZUN_CONTAINER_ACTIONS: SourceSpec(
