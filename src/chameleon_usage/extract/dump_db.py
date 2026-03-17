@@ -43,6 +43,9 @@ TABLES = {
         "container_actions",
         "container_actions_events",
     ],
+    "openstack_audit": [
+        "audit_blazar_computehosts",
+    ],
     "chameleon_usage": [
         "node_usage_report_cache",
         "node_count_cache",
