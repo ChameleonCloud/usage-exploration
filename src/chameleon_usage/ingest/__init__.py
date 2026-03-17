@@ -4,6 +4,7 @@ from datetime import datetime
 
 import polars as pl
 
+from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import ResourceTypes
 from chameleon_usage.ingest.adapters import (
     Adapter,
@@ -12,7 +13,7 @@ from chameleon_usage.ingest.adapters import (
     blazar_device_allocations_source,
     nova_instances_source,
 )
-from chameleon_usage.ingest.coerce import clamp_hierarchy
+from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
 from chameleon_usage.ingest.loader import load_raw_tables
 from chameleon_usage.sources import Tables
 
@@ -169,6 +170,73 @@ blazarDeviceCommitted = Adapter(
     },
 )
 
+
+
+
+##################
+# Audit adapters
+##################
+
+# Shared: convert audit rows → intervals and extract JSON fields.
+# Each audit table gets a source function here; adapters filter on predicates.
+
+_BLAZAR_HOST_AUDIT_FIELDS = [
+    "hypervisor_hostname",
+    "vcpus",
+    "memory_mb",
+    "local_gb",
+    "status",
+    "reservable",
+    "disabled",
+]
+
+_blazar_host_usable = (
+    pl.col("reservable").cast(pl.Int64).eq(1)
+    & pl.col("disabled").cast(pl.Int64).eq(0)
+)
+
+
+def _audit_blazar_host_source(tables):
+    """Audit rows → intervals with extracted JSON fields.
+
+    Returns an empty frame if the audit table was not loaded.
+    """
+    if Tables.AUDIT_BLAZAR_HOSTS not in tables:
+        return pl.LazyFrame(
+            schema={"id": pl.Utf8, "start": pl.Datetime, "end": pl.Datetime}
+        )
+    intervals = audit_to_intervals(tables[Tables.AUDIT_BLAZAR_HOSTS])
+    return extract_json_fields(intervals, _BLAZAR_HOST_AUDIT_FIELDS)
+
+
+_audit_blazar_context = {"hypervisor_hostname": "hypervisor_hostname"}
+_audit_blazar_resources = {
+    ResourceTypes.NODE: pl.lit(1),
+    ResourceTypes.VCPUS: pl.col("vcpus").cast(pl.Float64),
+    ResourceTypes.MEMORY_MB: pl.col("memory_mb").cast(pl.Float64),
+    ResourceTypes.DISK_GB: pl.col("local_gb").cast(pl.Float64),
+}
+
+auditBlazarHostUsable = Adapter(
+    entity_col="id",
+    metric=M.RESERVABLE_USABLE,
+    source=lambda t: _audit_blazar_host_source(t).filter(_blazar_host_usable),
+    context_cols=_audit_blazar_context,
+    start_col="start",
+    end_col="end",
+    resource_cols=_audit_blazar_resources,
+)
+
+auditBlazarHostUnusable = Adapter(
+    entity_col="id",
+    metric=M.RESERVABLE_UNUSABLE,
+    source=lambda t: _audit_blazar_host_source(t).filter(~_blazar_host_usable),
+    context_cols=_audit_blazar_context,
+    start_col="start",
+    end_col="end",
+    resource_cols=_audit_blazar_resources,
+)
+
 REGISTRY = AdapterRegistry(
     [
         novaHostTotal,
@@ -178,6 +246,8 @@ REGISTRY = AdapterRegistry(
         novaInstanceOccupiedOndemand,
         blazarDeviceReservable,
         blazarDeviceCommitted,
+        auditBlazarHostUsable,
+        auditBlazarHostUnusable,
     ]
 )
 
