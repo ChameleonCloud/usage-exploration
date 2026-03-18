@@ -45,6 +45,11 @@ TABLES = {
     ],
     "openstack_audit": [
         "audit_blazar_computehosts",
+        "audit_blazar_computehost_extra_capabilities",
+        "audit_blazar_resource_properties",
+        "audit_nova_compute_nodes",
+        "audit_nova_services",
+        "audit_ironic_nodes",
     ],
     "chameleon_usage": [
         "node_usage_report_cache",
