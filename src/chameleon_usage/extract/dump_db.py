@@ -49,6 +49,9 @@ TABLES = {
         "audit_blazar_resource_properties",
         "audit_nova_compute_nodes",
         "audit_nova_services",
+        "audit_nova_instances",
+        "audit_nova_instance_actions",
+        "audit_nova_instance_action_events",
         "audit_ironic_nodes",
     ],
     "chameleon_usage": [
