@@ -51,7 +51,7 @@ TABLES = {
         "audit_nova_services",
         "audit_nova_instances",
         "audit_nova_instance_actions",
-        "audit_nova_instance_action_events",
+        "audit_nova_instance_actions_events",
         "audit_ironic_nodes",
     ],
     "chameleon_usage": [
