@@ -171,8 +171,6 @@ blazarDeviceCommitted = Adapter(
 )
 
 
-
-
 ##################
 # Audit adapters
 ##################
@@ -190,10 +188,9 @@ _BLAZAR_HOST_AUDIT_FIELDS = [
     "disabled",
 ]
 
-_blazar_host_usable = (
-    pl.col("reservable").cast(pl.Int64).eq(1)
-    & pl.col("disabled").cast(pl.Int64).eq(0)
-)
+_blazar_host_usable = pl.col("reservable").cast(pl.Int64).eq(1) & pl.col(
+    "disabled"
+).cast(pl.Int64).eq(0)
 
 
 def _audit_blazar_host_source(tables):

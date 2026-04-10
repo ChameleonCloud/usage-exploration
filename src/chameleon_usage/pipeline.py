@@ -18,7 +18,6 @@ from chameleon_usage.schemas import (
     IntervalModel,
     PipelineSpec,
     TimelineModel,
-    UsageModel,
 )
 
 

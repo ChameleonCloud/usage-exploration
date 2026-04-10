@@ -4,7 +4,6 @@ import json
 from datetime import datetime
 
 import polars as pl
-import pytest
 
 from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
 
@@ -18,17 +17,40 @@ def _make_audit_df(rows: list[dict]) -> pl.LazyFrame:
 # audit_to_intervals
 # ---------------------------------------------------------------------------
 
+
 class TestAuditToIntervals:
     """SPEC §4: INSERT/UPDATE/DELETE rows → intervals via lead() window."""
 
     def test_basic_lifecycle(self):
         """INSERT → UPDATE → UPDATE → DELETE = 3 intervals."""
-        df = _make_audit_df([
-            {"id": "h1", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 1, 1), "data": "{}"},
-            {"id": "h1", "audit_event_type": "UPDATE", "audit_changed_at": datetime(2025, 3, 15), "data": "{}"},
-            {"id": "h1", "audit_event_type": "UPDATE", "audit_changed_at": datetime(2025, 3, 16), "data": "{}"},
-            {"id": "h1", "audit_event_type": "DELETE", "audit_changed_at": datetime(2025, 6, 1), "data": "{}"},
-        ])
+        df = _make_audit_df(
+            [
+                {
+                    "id": "h1",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 1, 1),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "UPDATE",
+                    "audit_changed_at": datetime(2025, 3, 15),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "UPDATE",
+                    "audit_changed_at": datetime(2025, 3, 16),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "DELETE",
+                    "audit_changed_at": datetime(2025, 6, 1),
+                    "data": "{}",
+                },
+            ]
+        )
         result = audit_to_intervals(df).collect()
 
         assert len(result) == 3
@@ -45,10 +67,22 @@ class TestAuditToIntervals:
 
     def test_backfill_insert_delete(self):
         """Backfill-only: INSERT + DELETE = 1 interval."""
-        df = _make_audit_df([
-            {"id": "h1", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 1, 1), "data": "{}"},
-            {"id": "h1", "audit_event_type": "DELETE", "audit_changed_at": datetime(2025, 6, 1), "data": "{}"},
-        ])
+        df = _make_audit_df(
+            [
+                {
+                    "id": "h1",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 1, 1),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "DELETE",
+                    "audit_changed_at": datetime(2025, 6, 1),
+                    "data": "{}",
+                },
+            ]
+        )
         result = audit_to_intervals(df).collect()
 
         assert len(result) == 1
@@ -57,9 +91,16 @@ class TestAuditToIntervals:
 
     def test_backfill_insert_only(self):
         """Backfill-only active host: INSERT with no DELETE = open-ended interval."""
-        df = _make_audit_df([
-            {"id": "h1", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 1, 1), "data": "{}"},
-        ])
+        df = _make_audit_df(
+            [
+                {
+                    "id": "h1",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 1, 1),
+                    "data": "{}",
+                },
+            ]
+        )
         result = audit_to_intervals(df).collect()
 
         assert len(result) == 1
@@ -68,11 +109,28 @@ class TestAuditToIntervals:
 
     def test_multiple_entities(self):
         """Each entity gets independent intervals."""
-        df = _make_audit_df([
-            {"id": "h1", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 1, 1), "data": "{}"},
-            {"id": "h1", "audit_event_type": "DELETE", "audit_changed_at": datetime(2025, 6, 1), "data": "{}"},
-            {"id": "h2", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 2, 1), "data": "{}"},
-        ])
+        df = _make_audit_df(
+            [
+                {
+                    "id": "h1",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 1, 1),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "DELETE",
+                    "audit_changed_at": datetime(2025, 6, 1),
+                    "data": "{}",
+                },
+                {
+                    "id": "h2",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 2, 1),
+                    "data": "{}",
+                },
+            ]
+        )
         result = audit_to_intervals(df).collect()
 
         assert len(result) == 2
@@ -83,10 +141,22 @@ class TestAuditToIntervals:
 
     def test_delete_rows_dropped(self):
         """DELETE rows should not appear in output."""
-        df = _make_audit_df([
-            {"id": "h1", "audit_event_type": "INSERT", "audit_changed_at": datetime(2025, 1, 1), "data": "{}"},
-            {"id": "h1", "audit_event_type": "DELETE", "audit_changed_at": datetime(2025, 6, 1), "data": "{}"},
-        ])
+        df = _make_audit_df(
+            [
+                {
+                    "id": "h1",
+                    "audit_event_type": "INSERT",
+                    "audit_changed_at": datetime(2025, 1, 1),
+                    "data": "{}",
+                },
+                {
+                    "id": "h1",
+                    "audit_event_type": "DELETE",
+                    "audit_changed_at": datetime(2025, 6, 1),
+                    "data": "{}",
+                },
+            ]
+        )
         result = audit_to_intervals(df).collect()
         assert "DELETE" not in result["audit_event_type"].to_list()
 
@@ -94,6 +164,7 @@ class TestAuditToIntervals:
 # ---------------------------------------------------------------------------
 # extract_json_fields
 # ---------------------------------------------------------------------------
+
 
 class TestExtractJsonFields:
     def test_extracts_named_fields(self):

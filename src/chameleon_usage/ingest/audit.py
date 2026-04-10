@@ -27,10 +27,7 @@ def audit_to_intervals(
     return (
         df.sort(entity_col, "audit_changed_at")
         .with_columns(
-            pl.col("audit_changed_at")
-            .shift(-1)
-            .over(entity_col)
-            .alias("end"),
+            pl.col("audit_changed_at").shift(-1).over(entity_col).alias("end"),
         )
         .rename({"audit_changed_at": "start"})
         .filter(pl.col("audit_event_type") != "DELETE")
