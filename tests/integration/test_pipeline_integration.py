@@ -54,6 +54,30 @@ def test_intervals_to_pipeline():
     assert len(result) > 0
 
 
+def test_registry_skips_adapter_with_missing_table():
+    """Adapters whose source table is missing are skipped; others still produce intervals."""
+    available_source = pl.LazyFrame(
+        {"id": ["a"], "created_at": [datetime(2024, 1, 1)], "deleted_at": [None]}
+    )
+    working = Adapter(
+        entity_col="id",
+        metric=M.RESERVABLE,
+        source=lambda t: available_source,
+        resource_cols={"nodes": pl.lit(1)},
+    )
+    missing = Adapter(
+        entity_col="id",
+        metric=M.TOTAL,
+        source=lambda t: t["nonexistent_table"],
+        resource_cols={"nodes": pl.lit(1)},
+    )
+    registry = AdapterRegistry([working, missing])
+    result = registry.to_intervals({}).collect()
+
+    assert len(result) == 1
+    assert result["metric"][0] == M.RESERVABLE
+
+
 def test_run_pipeline_produces_derived_metrics():
     spec = PipelineSpec(
         group_cols=("metric", "resource"),

@@ -194,14 +194,7 @@ _blazar_host_usable = pl.col("reservable").cast(pl.Int64).eq(1) & pl.col(
 
 
 def _audit_blazar_host_source(tables):
-    """Audit rows → intervals with extracted JSON fields.
-
-    Returns an empty frame if the audit table was not loaded.
-    """
-    if Tables.AUDIT_BLAZAR_HOSTS not in tables:
-        return pl.LazyFrame(
-            schema={"id": pl.Utf8, "start": pl.Datetime, "end": pl.Datetime}
-        )
+    """Audit rows → intervals with extracted JSON fields."""
     intervals = audit_to_intervals(tables[Tables.AUDIT_BLAZAR_HOSTS])
     return extract_json_fields(intervals, _BLAZAR_HOST_AUDIT_FIELDS)
 
