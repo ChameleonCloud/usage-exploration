@@ -4,8 +4,15 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+import polars as pl
+
 from chameleon_usage.config import SiteConfig, load_config
+from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
+from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
+from chameleon_usage.ingest import load_intervals
 from chameleon_usage.output import compat
+from chameleon_usage.pipeline import run_pipeline
+from chameleon_usage.schemas import PipelineSpec
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +31,6 @@ def _add_shared_args(parser: argparse.ArgumentParser) -> None:
 
 
 def process_site(config: SiteConfig, spec, resample: str):
-    """Process a site's data through the pipeline. Requires [pipeline] extras."""
-    import polars as pl
-
-    from chameleon_usage.ingest import load_intervals
-    from chameleon_usage.pipeline import run_pipeline
-
     data_dir = config.data_dir
     if data_dir is None:
         raise SystemExit(f"Error: no data_dir for site {config.key}")
@@ -47,8 +48,6 @@ def process_site(config: SiteConfig, spec, resample: str):
 
 
 def cmd_extract(args):
-    from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
-
     if args.print_grant_sql:
         logger.info("%s", generate_grant_sql(args.grant_user, args.grant_host))
         return
@@ -80,16 +79,8 @@ def cmd_extract(args):
 
 
 def cmd_process(args):
-    import polars as pl
-
     if not args.config:
         raise SystemExit("Error: --config required for process command")
-
-    from chameleon_usage.exceptions import (
-        RawTableLoadError,
-        log_raw_table_load_error,
-    )
-    from chameleon_usage.schemas import PipelineSpec
 
     sites_config = load_config(args.config)
     site_keys = args.site or list(sites_config.keys())
