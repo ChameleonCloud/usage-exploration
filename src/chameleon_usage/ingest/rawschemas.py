@@ -122,6 +122,22 @@ class NovaRequestSpecRaw(BaseRaw):
     spec: str = pa.Field()
 
 
+##########
+# Audit  #
+##########
+
+
+class AuditRaw(BaseRaw):
+    """Shared schema for all audit tables (same structure from audit_table.sql.j2)."""
+
+    audit_id: int = pa.Field(coerce=True)
+    id: str = pa.Field()
+    audit_event_type: str = pa.Field()
+    audit_changed_by: str = pa.Field()
+    audit_changed_at: pl.Datetime = pa.Field(coerce=True)
+    data: str = pa.Field()
+
+
 class NodeUsageReportCache(BaseRaw):
     date: pl.Datetime = pa.Field(coerce=True)
     node_type: str = pa.Field()

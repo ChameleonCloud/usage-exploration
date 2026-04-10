@@ -20,6 +20,10 @@ class Metrics:
     OCCUPIED_RESERVATION = "occupied_reservation"
     OCCUPIED_ONDEMAND = "occupied_ondemand"
 
+    # Audit-derived
+    RESERVABLE_USABLE = "reservable_usable"
+    RESERVABLE_UNUSABLE = "reservable_unusable"
+
     # Derived
     ONDEMAND_CAPACITY = "ondemand_capacity"
     AVAILABLE_RESERVABLE = "available_reservable"

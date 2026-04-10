@@ -39,6 +39,10 @@ def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
     if M.OCCUPIED_ONDEMAND not in cols:
         pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.OCCUPIED_ONDEMAND))
         logger.warning("OCCUPIED_ONDEMAND not in columns, setting == 0")
+    if M.RESERVABLE_USABLE not in cols:
+        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.RESERVABLE_USABLE))
+    if M.RESERVABLE_UNUSABLE not in cols:
+        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.RESERVABLE_UNUSABLE))
 
     # Handle case where columns missing for a specific site
     site_missing_total = pl.col(M.TOTAL).is_null().all().over("site")
@@ -70,6 +74,8 @@ def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
             pl.lit(RT.NODE).alias("resource"),
             pl.col(M.TOTAL),
             pl.col(M.RESERVABLE),
+            pl.col(M.RESERVABLE_USABLE).alias("reservable_usable"),
+            pl.col(M.RESERVABLE_UNUSABLE).alias("reservable_unusable"),
             pl.col(M.COMMITTED),
             pl.col(M.OCCUPIED_ONDEMAND),
             pl.col(M.OCCUPIED_RESERVATION).alias("occupied_reserved"),

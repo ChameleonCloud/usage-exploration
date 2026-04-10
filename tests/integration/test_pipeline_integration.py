@@ -7,7 +7,6 @@ import polars as pl
 from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import ResourceTypes as RT
 from chameleon_usage.ingest.adapters import Adapter, AdapterRegistry
-from chameleon_usage.ingest.coerce import clamp_hierarchy
 from chameleon_usage.pipeline import run_pipeline
 from chameleon_usage.schemas import IntervalModel, PipelineSpec
 
@@ -28,8 +27,8 @@ def test_adapter_output_matches_interval_schema():
     IntervalModel.validate(result)
 
 
-def test_clamp_hierarchy_to_pipeline():
-    """Intervals through clamp_hierarchy can be fed to run_pipeline."""
+def test_intervals_to_pipeline():
+    """Intervals can be fed directly to run_pipeline."""
     intervals = pl.LazyFrame(
         {
             "entity_id": ["host1", "blazar1", "alloc1", "inst1"],
@@ -43,11 +42,6 @@ def test_clamp_hierarchy_to_pipeline():
             "metric": [M.TOTAL, M.RESERVABLE, M.COMMITTED, M.OCCUPIED_RESERVATION],
             "resource": [RT.NODE] * 4,
             "value": [1.0] * 4,
-            "hypervisor_hostname": ["host1"] * 4,
-            "blazar_host_id": [None, "blazar1", "blazar1", None],
-            "blazar_reservation_id": [None, None, "res1", "res1"],
-            "reservation_type": [None, None, "physical:host", None],
-            "booking_type": [None, None, None, "reservation"],
         }
     )
     spec = PipelineSpec(
@@ -55,9 +49,7 @@ def test_clamp_hierarchy_to_pipeline():
         time_range=(datetime(2024, 1, 1), datetime(2024, 1, 5)),
     )
 
-    clamped = clamp_hierarchy(intervals)
-    valid = clamped.filter(pl.col("valid"))
-    result = run_pipeline(valid, spec).collect()
+    result = run_pipeline(intervals, spec).collect()
 
     assert len(result) > 0
 
