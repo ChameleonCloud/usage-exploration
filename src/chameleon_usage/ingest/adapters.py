@@ -1,5 +1,6 @@
 """Adapters convert raw tables to IntervalSchema."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -8,6 +9,8 @@ import polars as pl
 from chameleon_usage.constants import SchemaCols as S
 from chameleon_usage.schemas import IntervalModel
 from chameleon_usage.sources import Tables
+
+logger = logging.getLogger(__name__)
 
 RawTables = dict[str, pl.LazyFrame]
 
@@ -61,7 +64,14 @@ class AdapterRegistry:
     def to_intervals(self, tables: RawTables) -> pl.LazyFrame:
         intervals = []
         for adapter in self.adapters:
-            normalized = self._convert(adapter.source(tables), adapter)
+            try:
+                normalized = self._convert(adapter.source(tables), adapter)
+            except KeyError as exc:
+                logger.info(
+                    "Skipping adapter %s: missing table %s", adapter.metric, exc
+                )
+                continue
+
             # HACK: handle case where no resource columns are specified, "unpivot" will explode.
             if adapter.resource_cols:
                 normalized = self._inflate_resources(normalized, adapter.resource_cols)
