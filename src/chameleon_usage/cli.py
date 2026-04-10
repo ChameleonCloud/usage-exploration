@@ -33,20 +33,6 @@ def _resolve_sites(args) -> list[SiteConfig]:
     return configs
 
 
-def process_site(config: SiteConfig, spec, resample: str):
-    data_dir = config.data_dir
-    if data_dir is None:
-        raise SystemExit(f"Error: no data_dir for site {config.key}")
-
-    intervals = load_intervals(data_dir, spec.time_range).collect().lazy()
-
-    cols = set(intervals.collect_schema().names())
-    if "site" not in cols:
-        intervals = intervals.with_columns(pl.lit(config.key).alias("site"))
-
-    return run_pipeline(intervals, spec, resample_interval=resample)
-
-
 # ── Subcommands ──────────────────────────────────────────────────────────
 
 
@@ -93,7 +79,10 @@ def cmd_process(args):
             raise SystemExit(f"Error: no data_dir for site {config.key}")
 
         try:
-            site_usage = process_site(config, spec, args.resample)
+            intervals = load_intervals(config.data_dir, spec.time_range).with_columns(
+                pl.lit(config.key).alias("site")
+            )
+            site_usage = run_pipeline(intervals, spec, resample_interval=args.resample)
         except RawTableLoadError as exc:
             log_raw_table_load_error(logger, config.key, exc)
             continue
