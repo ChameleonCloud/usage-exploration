@@ -113,3 +113,25 @@ def get_site_time_range(
     if not mins or not maxs:
         return None
     return (min(mins), max(maxs))
+
+
+def get_last_modified(tables: list[TableMeta]) -> datetime | None:
+    """Get the most recent S3 LastModified across all table files.
+
+    Returns None for local paths.
+    """
+    if not tables or not tables[0].path.startswith("s3://"):
+        return None
+
+    import s3fs
+
+    fs = s3fs.S3FileSystem()
+    latest = None
+    for t in tables:
+        mtime = fs.info(t.path).get("LastModified")
+        # S3 returns UTC; parquet datetimes are also UTC, just stored naive
+        if mtime and mtime.tzinfo:
+            mtime = mtime.replace(tzinfo=None)
+        if mtime and (latest is None or mtime > latest):
+            latest = mtime
+    return latest

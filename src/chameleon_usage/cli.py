@@ -10,7 +10,11 @@ from chameleon_usage.config import SiteConfig, load_config
 from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
 from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
 from chameleon_usage.ingest import load_intervals
-from chameleon_usage.ingest.metadata import get_site_time_range, read_site_meta
+from chameleon_usage.ingest.metadata import (
+    get_last_modified,
+    get_site_time_range,
+    read_site_meta,
+)
 from chameleon_usage.output import compat
 from chameleon_usage.pipeline import run_pipeline
 from chameleon_usage.schemas import PipelineSpec
@@ -82,13 +86,6 @@ def cmd_extract(args):
 
 
 def cmd_process(args):
-    start = datetime.fromisoformat(args.start_date)
-    end = datetime.fromisoformat(args.end_date)
-    spec = PipelineSpec(
-        group_cols=("metric", "resource", "site", "collector_type"),
-        time_range=(start, end),
-    )
-
     output_base = Path(args.output)
     output_base.mkdir(parents=True, exist_ok=True)
     usage_frames: list[pl.DataFrame] = []
@@ -97,6 +94,30 @@ def cmd_process(args):
     for config in _resolve_sites(args):
         if not config.data_dir:
             raise SystemExit(f"Error: no data_dir for site {config.key}")
+
+        if bool(args.start_date) != bool(args.end_date):
+            raise SystemExit(
+                "Error: --start-date and --end-date must be provided together, or both omitted"
+            )
+
+        if args.start_date:
+            start = datetime.fromisoformat(args.start_date)
+            end = datetime.fromisoformat(args.end_date)
+        else:
+            tables = read_site_meta(config.data_dir)
+            time_range = get_site_time_range(tables)
+            if not time_range:
+                raise SystemExit(
+                    f"Error: no date range for {config.key}; use --start-date and --end-date"
+                )
+            start = time_range[0]
+            end = get_last_modified(tables) or time_range[1]
+            logger.info("[%s] derived date range: %s — %s", config.key, start, end)
+
+        spec = PipelineSpec(
+            group_cols=("metric", "resource", "site", "collector_type"),
+            time_range=(start, end),
+        )
 
         try:
             intervals = load_intervals(config.data_dir, spec.time_range).with_columns(
@@ -185,13 +206,11 @@ def parse_args() -> argparse.Namespace:
     )
     process.add_argument(
         "--start-date",
-        required=True,
-        help="Start date (YYYY-MM-DD).",
+        help="Start date (YYYY-MM-DD). Derived from data if omitted.",
     )
     process.add_argument(
         "--end-date",
-        required=True,
-        help="End date (YYYY-MM-DD).",
+        help="End date (YYYY-MM-DD). Derived from data if omitted.",
     )
     process.add_argument(
         "--resample",
