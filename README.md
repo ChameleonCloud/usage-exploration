@@ -60,7 +60,7 @@ The following command shows how to create a SQL user and set these permissions,
 and outputs a series of SQL commands to run manually, setting up this least-privilege user.
 
 ```bash
-chameleon-usage print-grant-sql --user ccusage
+chameleon-usage extract --print-grant-sql --grant-user ccusage
 ```
 
 Example, generated for user `ccusage` and default host `%`
@@ -132,7 +132,7 @@ site_key_name:
 The following command uses the provided config to fetch data from the OpenStack DB and write it to file for later analysis.
 
 ```bash
-chameleon-usage --config etc/site.yml --site site_key_name extract
+chameleon-usage extract --config etc/site.yml --site site_key_name
 ```
 
 ### Generating the usage timeline
@@ -140,10 +140,9 @@ chameleon-usage --config etc/site.yml --site site_key_name extract
 Finally, the `process` command takes the raw data and configuration, and outputs the usage timeline.
 
 ```bash
-chameleon-usage \
+chameleon-usage process \
   --config etc/site.yml \
   --site site_key_name \
-  process \
   --output output/usage \
   --start-date 2024-01-01 \
   --end-date 2024-12-31
