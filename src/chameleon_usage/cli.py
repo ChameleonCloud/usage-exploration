@@ -10,7 +10,7 @@ from chameleon_usage.config import SiteConfig, load_config
 from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
 from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
 from chameleon_usage.ingest import load_intervals
-from chameleon_usage.ingest.metadata import read_site_meta
+from chameleon_usage.ingest.metadata import get_site_time_range, read_site_meta
 from chameleon_usage.output import compat
 from chameleon_usage.pipeline import run_pipeline
 from chameleon_usage.schemas import PipelineSpec
@@ -47,7 +47,13 @@ def cmd_info(args):
             logger.info("  no tables found")
             continue
         for t in tables:
-            logger.info("  %-40s %8d rows", t.key, t.num_rows)
+            time_range = ""
+            if t.time_min and t.time_max:
+                time_range = f"  {t.time_min} — {t.time_max}"
+            logger.info("  %-40s %8d rows%s", t.key, t.num_rows, time_range)
+        site_range = get_site_time_range(tables)
+        if site_range:
+            logger.info("  data range: %s — %s", site_range[0], site_range[1])
 
 
 def cmd_extract(args):

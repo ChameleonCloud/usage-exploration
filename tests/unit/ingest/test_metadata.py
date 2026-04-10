@@ -1,9 +1,15 @@
 """Tests for parquet metadata reading."""
 
+from datetime import datetime
+
 import polars as pl
 import pytest
 
-from chameleon_usage.ingest.metadata import read_site_meta, read_table_meta
+from chameleon_usage.ingest.metadata import (
+    get_site_time_range,
+    read_site_meta,
+    read_table_meta,
+)
 from chameleon_usage.sources import SOURCE_REGISTRY
 
 
@@ -19,6 +25,33 @@ def parquet_dir(tmp_path):
     return tmp_path, [k for k, _ in specs_to_create]
 
 
+@pytest.fixture
+def parquet_dir_with_data(tmp_path):
+    """Create a parquet file with rows so column stats are populated."""
+    from chameleon_usage.sources import Tables
+
+    key = Tables.NOVA_INSTANCES
+    spec = SOURCE_REGISTRY[key]
+    filename = f"{spec.db_schema}.{spec.db_table}.parquet"
+    df = pl.DataFrame(
+        {
+            "id": ["1", "2"],
+            "uuid": ["aaa", "bbb"],
+            "created_at": [datetime(2023, 1, 1), datetime(2024, 6, 15)],
+            "deleted_at": pl.Series([None, None], dtype=pl.Datetime),
+            "launched_at": [datetime(2023, 1, 1), datetime(2024, 6, 15)],
+            "terminated_at": [datetime(2023, 1, 1), datetime(2024, 6, 15)],
+            "host": ["h1", "h2"],
+            "node": ["n1", "n2"],
+            "vcpus": [1, 2],
+            "memory_mb": [512, 1024],
+            "root_gb": [10, 20],
+        }
+    )
+    df.write_parquet(tmp_path / filename)
+    return tmp_path, key, spec
+
+
 def test_read_table_meta_returns_meta_for_existing_file(parquet_dir):
     path, keys = parquet_dir
     key = keys[0]
@@ -27,6 +60,30 @@ def test_read_table_meta_returns_meta_for_existing_file(parquet_dir):
     assert result is not None
     assert result.key == key
     assert result.num_rows == 0
+    # Empty file has no stats
+    assert result.time_min is None
+    assert result.time_max is None
+
+
+def test_read_table_meta_has_time_stats(parquet_dir_with_data):
+    path, key, spec = parquet_dir_with_data
+    result = read_table_meta(str(path), spec, key)
+    assert result is not None
+    assert result.time_min == datetime(2023, 1, 1)
+    assert result.time_max == datetime(2024, 6, 15)
+
+
+def test_get_site_time_range_from_tables(parquet_dir_with_data):
+    path, key, spec = parquet_dir_with_data
+    tables = read_site_meta(str(path))
+    time_range = get_site_time_range(tables)
+    assert time_range is not None
+    assert time_range[0] == datetime(2023, 1, 1)
+    assert time_range[1] == datetime(2024, 6, 15)
+
+
+def test_get_site_time_range_empty():
+    assert get_site_time_range([]) is None
 
 
 def test_read_table_meta_returns_none_for_missing_file(tmp_path):
