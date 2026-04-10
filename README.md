@@ -60,7 +60,7 @@ The following command shows how to create a SQL user and set these permissions,
 and outputs a series of SQL commands to run manually, setting up this least-privilege user.
 
 ```bash
-chameleon-usage print-grant-sql --user ccusage
+chameleon-usage extract --print-grant-sql --grant-user ccusage
 ```
 
 Example, generated for user `ccusage` and default host `%`

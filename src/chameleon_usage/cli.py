@@ -38,13 +38,13 @@ def parse_args() -> argparse.Namespace:
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
     )
 
-    grant_sql = subparsers.add_parser(
-        "print-grant-sql", help="Print SQL to grant read access"
+    extract.add_argument(
+        "--print-grant-sql",
+        action="store_true",
+        help="Print SQL to grant read access and exit.",
     )
-    grant_sql.add_argument("--user", default="usage_exporter", help="MySQL username")
-    grant_sql.add_argument(
-        "--host", default="%", help="MySQL host patterns (default: %%)"
-    )
+    extract.add_argument("--grant-user", default="usage_exporter", help="MySQL username for grant SQL.")
+    extract.add_argument("--grant-host", default="%%", help="MySQL host pattern for grant SQL.")
 
     process = subparsers.add_parser(
         "process", help="Compute usage timelines from parquet data"
@@ -101,14 +101,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args()
 
-    if args.command == "print-grant-sql":
-        from chameleon_usage.extract.dump_db import generate_grant_sql
-
-        logger.info("%s", generate_grant_sql(args.user, args.host))
-        return
-
     if args.command == "extract":
-        from chameleon_usage.extract.dump_db import dump_to_parquet
+        from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
+
+        if args.print_grant_sql:
+            logger.info("%s", generate_grant_sql(args.grant_user, args.grant_host))
+            return
 
         # Priority: --db-uri > $DATABASE_URI > config.db_uri
         db_uri = args.db_uri or os.environ.get("DATABASE_URI")
