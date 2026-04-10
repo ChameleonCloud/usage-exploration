@@ -143,9 +143,7 @@ Finally, the `process` command takes the raw data and configuration, and outputs
 chameleon-usage process \
   --config etc/site.yml \
   --site site_key_name \
-  --output output/usage \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31
+  --output output/usage
 ```
 
 ## CLI Details
