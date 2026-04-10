@@ -17,7 +17,6 @@ from chameleon_usage.schemas import PipelineSpec
 logger = logging.getLogger(__name__)
 
 
-
 def _resolve_sites(args) -> list[SiteConfig]:
     """Load config, resolve site list and data_dir overrides."""
     if not args.config:
@@ -115,8 +114,12 @@ def parse_args() -> argparse.Namespace:
         "extract", help="Dump database tables to parquet files"
     )
     extract.add_argument("--config", help="Path to site config YAML.")
-    extract.add_argument("--site", action="append", help="Site key (repeatable). Defaults to all sites.")
-    extract.add_argument("--data-dir", help="Local directory or s3://. Overrides config data_dir.")
+    extract.add_argument(
+        "--site", action="append", help="Site key (repeatable). Defaults to all sites."
+    )
+    extract.add_argument(
+        "--data-dir", help="Local directory or s3://. Overrides config data_dir."
+    )
     extract.add_argument(
         "--db-uri",
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
@@ -126,16 +129,24 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print SQL to grant read access and exit.",
     )
-    extract.add_argument("--grant-user", default="usage_exporter", help="MySQL username for grant SQL.")
-    extract.add_argument("--grant-host", default="%%", help="MySQL host pattern for grant SQL.")
+    extract.add_argument(
+        "--grant-user", default="usage_exporter", help="MySQL username for grant SQL."
+    )
+    extract.add_argument(
+        "--grant-host", default="%%", help="MySQL host pattern for grant SQL."
+    )
     extract.set_defaults(func=cmd_extract)
 
     process = subparsers.add_parser(
         "process", help="Compute usage timelines from parquet data"
     )
     process.add_argument("--config", required=True, help="Path to site config YAML.")
-    process.add_argument("--site", action="append", help="Site key (repeatable). Defaults to all sites.")
-    process.add_argument("--data-dir", help="Local directory or s3://. Overrides config data_dir.")
+    process.add_argument(
+        "--site", action="append", help="Site key (repeatable). Defaults to all sites."
+    )
+    process.add_argument(
+        "--data-dir", help="Local directory or s3://. Overrides config data_dir."
+    )
     process.add_argument(
         "--output",
         required=True,
