@@ -17,18 +17,6 @@ from chameleon_usage.schemas import PipelineSpec
 logger = logging.getLogger(__name__)
 
 
-def _add_shared_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--config", help="Path to site config YAML.")
-    parser.add_argument(
-        "--site",
-        action="append",
-        help="Site key (repeatable). Defaults to all sites.",
-    )
-    parser.add_argument(
-        "--data-dir",
-        help="Local directory or s3://. Overrides config data_dir.",
-    )
-
 
 def _resolve_sites(args) -> list[SiteConfig]:
     """Load config, resolve site list and data_dir overrides."""
@@ -137,7 +125,9 @@ def parse_args() -> argparse.Namespace:
     extract = subparsers.add_parser(
         "extract", help="Dump database tables to parquet files"
     )
-    _add_shared_args(extract)
+    extract.add_argument("--config", help="Path to site config YAML.")
+    extract.add_argument("--site", action="append", help="Site key (repeatable). Defaults to all sites.")
+    extract.add_argument("--data-dir", help="Local directory or s3://. Overrides config data_dir.")
     extract.add_argument(
         "--db-uri",
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
@@ -154,7 +144,9 @@ def parse_args() -> argparse.Namespace:
     process = subparsers.add_parser(
         "process", help="Compute usage timelines from parquet data"
     )
-    _add_shared_args(process)
+    process.add_argument("--config", required=True, help="Path to site config YAML.")
+    process.add_argument("--site", action="append", help="Site key (repeatable). Defaults to all sites.")
+    process.add_argument("--data-dir", help="Local directory or s3://. Overrides config data_dir.")
     process.add_argument(
         "--output",
         required=True,
