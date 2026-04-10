@@ -10,6 +10,7 @@ from chameleon_usage.config import SiteConfig, load_config
 from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
 from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
 from chameleon_usage.ingest import load_intervals
+from chameleon_usage.ingest.metadata import read_site_meta
 from chameleon_usage.output import compat
 from chameleon_usage.pipeline import run_pipeline
 from chameleon_usage.schemas import PipelineSpec
@@ -33,6 +34,20 @@ def _resolve_sites(args) -> list[SiteConfig]:
 
 
 # ── Subcommands ──────────────────────────────────────────────────────────
+
+
+def cmd_info(args):
+    for config in _resolve_sites(args):
+        if not config.data_dir:
+            logger.warning("[%s] no data_dir configured, skipping", config.key)
+            continue
+        logger.info("[%s] %s", config.key, config.data_dir)
+        tables = read_site_meta(config.data_dir)
+        if not tables:
+            logger.info("  no tables found")
+            continue
+        for t in tables:
+            logger.info("  %-40s %8d rows", t.key, t.num_rows)
 
 
 def cmd_extract(args):
@@ -109,6 +124,16 @@ def parse_args() -> argparse.Namespace:
         description="Chameleon cloud resource usage reporting.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    info = subparsers.add_parser("info", help="Show available tables and row counts")
+    info.add_argument("--config", required=True, help="Path to site config YAML.")
+    info.add_argument(
+        "--site", action="append", help="Site key (repeatable). Defaults to all sites."
+    )
+    info.add_argument(
+        "--data-dir", help="Local directory or s3://. Overrides config data_dir."
+    )
+    info.set_defaults(func=cmd_info)
 
     extract = subparsers.add_parser(
         "extract", help="Dump database tables to parquet files"
