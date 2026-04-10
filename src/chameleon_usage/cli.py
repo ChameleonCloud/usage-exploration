@@ -10,35 +10,29 @@ from chameleon_usage.output import compat
 logger = logging.getLogger(__name__)
 
 
-def _add_shared_args(
-    parser: argparse.ArgumentParser, default: object | None = None
-) -> None:
-    parser.add_argument(
-        "--config",
-        help="Path to etc/site.yml (required for process command)",
-        default=default,
-    )
+def _add_shared_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", help="Path to site config YAML.")
     parser.add_argument(
         "--site",
         action="append",
-        help="Site key from etc/site.yml (repeatable). Defaults to all sites.",
-        default=default,
+        help="Site key (repeatable). Defaults to all sites.",
     )
     parser.add_argument(
         "--data-dir",
-        help="Local directory or s3://. Overrides config.data_dir if set.",
-        default=default,
+        help="Local directory or s3://. Overrides config data_dir.",
     )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    _add_shared_args(parser)
-
+    parser = argparse.ArgumentParser(
+        description="Chameleon cloud resource usage reporting.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    extract = subparsers.add_parser("extract")
-    _add_shared_args(extract, default=argparse.SUPPRESS)
+    extract = subparsers.add_parser(
+        "extract", help="Dump database tables to parquet files"
+    )
+    _add_shared_args(extract)
     extract.add_argument(
         "--db-uri",
         help="Database URI (mysql://user:pass@host:port). Falls back to $DATABASE_URI.",
@@ -52,8 +46,10 @@ def parse_args() -> argparse.Namespace:
         "--host", default="%", help="MySQL host patterns (default: %%)"
     )
 
-    process = subparsers.add_parser("process")
-    _add_shared_args(process, default=argparse.SUPPRESS)
+    process = subparsers.add_parser(
+        "process", help="Compute usage timelines from parquet data"
+    )
+    _add_shared_args(process)
     process.add_argument(
         "--output",
         required=True,
@@ -71,12 +67,11 @@ def parse_args() -> argparse.Namespace:
     )
     process.add_argument(
         "--resample",
-        help="Optional resample interval (e.g. 1d, 7d).",
+        help="Resample interval (e.g. 1h, 1d, 7d).",
     )
-
     process.add_argument(
         "--export-uri",
-        help="Optional DB URI to push output data into. Falls back to env var EXPORT_URI.",
+        help="DB URI to push output data into. Falls back to $EXPORT_URI.",
     )
 
     return parser.parse_args()
