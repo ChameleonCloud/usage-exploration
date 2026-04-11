@@ -115,7 +115,7 @@ def cmd_process(args):
             logger.info("[%s] derived date range: %s — %s", config.key, start, end)
 
         spec = PipelineSpec(
-            group_cols=("metric", "resource", "site", "collector_type"),
+            group_cols=("metric", "resource", "site", "collector_type", "usable"),
             time_range=(start, end),
         )
 
