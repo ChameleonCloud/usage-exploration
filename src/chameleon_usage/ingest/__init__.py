@@ -45,6 +45,10 @@ def _audit_blazar_host_source(tables):
 def _usability_events(tables) -> pl.LazyFrame:
     """Build usability intervals per host from the audit table.
 
+    Backfilled rows provide the baseline usability state per host.
+    Transition timestamps are only accurate for non-backfill rows,
+    but the state itself (reservable/disabled) is correct at backfill time.
+
     Returns [hypervisor_hostname, event_start, event_end, usable].
     """
     audit = _audit_blazar_host_source(tables)

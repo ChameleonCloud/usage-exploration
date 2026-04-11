@@ -18,18 +18,19 @@ def audit_to_intervals(
 ) -> pl.LazyFrame:
     """Convert audit event rows into intervals via lead() window.
 
-    Each row's ``audit_changed_at`` becomes ``start``; the next row's
-    timestamp (per entity) becomes ``end``.  DELETE rows only serve as
-    end-markers and are dropped from output.
+    Uses ``audit_event_time`` (when the change happened in the source table)
+    for interval boundaries, not ``audit_changed_at`` (when the audit row
+    was physically inserted).  The next row's event time becomes ``end``.
+    DELETE rows only serve as end-markers and are dropped from output.
 
     Fully vectorized: sort → shift → rename → filter.
     """
     return (
-        df.sort(entity_col, "audit_changed_at")
+        df.sort(entity_col, "audit_event_time")
         .with_columns(
-            pl.col("audit_changed_at").shift(-1).over(entity_col).alias("end"),
+            pl.col("audit_event_time").shift(-1).over(entity_col).alias("end"),
         )
-        .rename({"audit_changed_at": "start"})
+        .rename({"audit_event_time": "start"})
         .filter(pl.col("audit_event_type") != "DELETE")
     )
 

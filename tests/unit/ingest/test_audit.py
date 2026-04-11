@@ -10,7 +10,11 @@ from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
 
 def _make_audit_df(rows: list[dict]) -> pl.LazyFrame:
     """Build an audit LazyFrame from a list of row dicts."""
-    return pl.LazyFrame(rows).cast({"audit_changed_at": pl.Datetime})
+    # Tests use audit_changed_at for brevity; copy to audit_event_time
+    # which is what audit_to_intervals actually uses for interval boundaries.
+    return pl.LazyFrame(rows).cast({"audit_changed_at": pl.Datetime}).with_columns(
+        pl.col("audit_changed_at").alias("audit_event_time")
+    )
 
 
 # ---------------------------------------------------------------------------
