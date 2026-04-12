@@ -258,3 +258,61 @@ def test_preserves_extra_columns():
     assert result["resource"][0] == "nodes"
     assert result["value"][0] == 1.0
     assert result["metric"][0] == "committed"
+
+
+def test_partial_coverage_null_for_unmatched():
+    """Hosts without usability events keep usable=null."""
+    intervals = pl.DataFrame(
+        {
+            "entity_id": ["a", "b", "c"],
+            "start": [T(2024, 1, 1), T(2024, 1, 1), T(2024, 1, 1)],
+            "end": [T(2024, 3, 1), T(2024, 3, 1), T(2024, 3, 1)],
+            "metric": ["reservable"] * 3,
+            "host": ["h1", "h2", "h3"],
+            "value": [1.0, 1.0, 1.0],
+        }
+    )
+    # Only h1 has usability events — h2 and h3 have none
+    events = pl.DataFrame(
+        {
+            "host": ["h1", "h1"],
+            "event_start": [T(2024, 1, 1), T(2024, 2, 1)],
+            "event_end": [T(2024, 2, 1), T(2024, 3, 1)],
+            "usable": [True, False],
+        }
+    )
+    result = _tag(intervals, events, by="host")
+
+    # h1 split into 2, h2 and h3 stay as 1 each = 4 rows
+    assert len(result) == 4
+    # h2 and h3 have usable=null
+    nulls = result.filter(pl.col("usable").is_null())
+    assert len(nulls) == 2
+    assert set(nulls["entity_id"].to_list()) == {"b", "c"}
+
+
+def test_split_interval_value_preserved():
+    """Splitting an interval doesn't change the value — each piece keeps the original."""
+    intervals = pl.DataFrame(
+        {
+            "entity_id": ["a"],
+            "start": [T(2024, 1, 1)],
+            "end": [T(2024, 3, 1)],
+            "metric": ["reservable"],
+            "host": ["h1"],
+            "value": [1.0],
+        }
+    )
+    events = pl.DataFrame(
+        {
+            "host": ["h1", "h1"],
+            "event_start": [T(2024, 1, 1), T(2024, 2, 1)],
+            "event_end": [T(2024, 2, 1), T(2024, 3, 1)],
+            "usable": [True, False],
+        }
+    )
+    result = _tag(intervals, events, by="host")
+
+    assert len(result) == 2
+    # Each piece has value=1.0, not 0.5
+    assert result["value"].to_list() == [1.0, 1.0]
