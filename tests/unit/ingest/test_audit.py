@@ -10,7 +10,7 @@ from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
 
 def _make_audit_df(rows: list[dict]) -> pl.LazyFrame:
     """Build an audit LazyFrame from a list of row dicts."""
-    return pl.LazyFrame(rows).cast({"audit_changed_at": pl.Datetime})
+    return pl.LazyFrame(rows).cast({"audit_event_time": pl.Datetime})
 
 
 # ---------------------------------------------------------------------------
@@ -28,25 +28,25 @@ class TestAuditToIntervals:
                 {
                     "id": "h1",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 1, 1),
+                    "audit_event_time": datetime(2025, 1, 1),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "UPDATE",
-                    "audit_changed_at": datetime(2025, 3, 15),
+                    "audit_event_time": datetime(2025, 3, 15),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "UPDATE",
-                    "audit_changed_at": datetime(2025, 3, 16),
+                    "audit_event_time": datetime(2025, 3, 16),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "DELETE",
-                    "audit_changed_at": datetime(2025, 6, 1),
+                    "audit_event_time": datetime(2025, 6, 1),
                     "data": "{}",
                 },
             ]
@@ -72,13 +72,13 @@ class TestAuditToIntervals:
                 {
                     "id": "h1",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 1, 1),
+                    "audit_event_time": datetime(2025, 1, 1),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "DELETE",
-                    "audit_changed_at": datetime(2025, 6, 1),
+                    "audit_event_time": datetime(2025, 6, 1),
                     "data": "{}",
                 },
             ]
@@ -96,7 +96,7 @@ class TestAuditToIntervals:
                 {
                     "id": "h1",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 1, 1),
+                    "audit_event_time": datetime(2025, 1, 1),
                     "data": "{}",
                 },
             ]
@@ -114,19 +114,19 @@ class TestAuditToIntervals:
                 {
                     "id": "h1",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 1, 1),
+                    "audit_event_time": datetime(2025, 1, 1),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "DELETE",
-                    "audit_changed_at": datetime(2025, 6, 1),
+                    "audit_event_time": datetime(2025, 6, 1),
                     "data": "{}",
                 },
                 {
                     "id": "h2",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 2, 1),
+                    "audit_event_time": datetime(2025, 2, 1),
                     "data": "{}",
                 },
             ]
@@ -146,13 +146,13 @@ class TestAuditToIntervals:
                 {
                     "id": "h1",
                     "audit_event_type": "INSERT",
-                    "audit_changed_at": datetime(2025, 1, 1),
+                    "audit_event_time": datetime(2025, 1, 1),
                     "data": "{}",
                 },
                 {
                     "id": "h1",
                     "audit_event_type": "DELETE",
-                    "audit_changed_at": datetime(2025, 6, 1),
+                    "audit_event_time": datetime(2025, 6, 1),
                     "data": "{}",
                 },
             ]

@@ -133,6 +133,7 @@ class AuditRaw(BaseRaw):
     audit_id: int = pa.Field(coerce=True)
     id: str = pa.Field()
     audit_event_type: str = pa.Field()
+    audit_event_time: pl.Datetime = pa.Field(coerce=True)
     audit_changed_by: str = pa.Field()
     audit_changed_at: pl.Datetime = pa.Field(coerce=True)
     data: str = pa.Field()
