@@ -4,7 +4,6 @@ from datetime import datetime
 
 import polars as pl
 
-from chameleon_usage.constants import Metrics as M
 from chameleon_usage.constants import ResourceTypes
 from chameleon_usage.ingest.adapters import (
     Adapter,
@@ -15,10 +14,54 @@ from chameleon_usage.ingest.adapters import (
 )
 from chameleon_usage.ingest.audit import audit_to_intervals, extract_json_fields
 from chameleon_usage.ingest.loader import load_raw_tables
+from chameleon_usage.math.intervals import tag_intervals
 from chameleon_usage.sources import Tables
 
 ##################
-# Default registry
+# Audit helpers
+##################
+
+_BLAZAR_HOST_AUDIT_FIELDS = [
+    "hypervisor_hostname",
+    "vcpus",
+    "memory_mb",
+    "local_gb",
+    "status",
+    "reservable",
+    "disabled",
+]
+
+_blazar_host_usable = pl.col("reservable").cast(pl.Int64).eq(1) & pl.col(
+    "disabled"
+).cast(pl.Int64).eq(0)
+
+
+def _audit_blazar_host_source(tables):
+    """Audit rows → intervals with extracted JSON fields."""
+    intervals = audit_to_intervals(tables[Tables.AUDIT_BLAZAR_HOSTS])
+    return extract_json_fields(intervals, _BLAZAR_HOST_AUDIT_FIELDS)
+
+
+def _usability_events(tables) -> pl.LazyFrame:
+    """Build usability intervals per host from the audit table.
+
+    Backfilled rows provide the baseline usability state per host.
+    Transition timestamps are only accurate for non-backfill rows,
+    but the state itself (reservable/disabled) is correct at backfill time.
+
+    Returns [hypervisor_hostname, event_start, event_end, usable].
+    """
+    audit = _audit_blazar_host_source(tables)
+    return audit.select(
+        "hypervisor_hostname",
+        pl.col("start").alias("event_start"),
+        pl.col("end").alias("event_end"),
+        _blazar_host_usable.alias("usable"),
+    )
+
+
+##################
+# Adapters
 ##################
 
 novaHostTotal = Adapter(
@@ -38,19 +81,19 @@ novaHostTotal = Adapter(
         ResourceTypes.DISK_GB: pl.col("local_gb"),  # TODO handle overcommit
     },
 )
-blazarHostReservable = Adapter(
-    entity_col="hypervisor_hostname",
+
+auditBlazarHostReservable = Adapter(
+    entity_col="id",
     metric="reservable",
-    source=lambda t: t[Tables.BLAZAR_HOSTS],
-    context_cols={
-        "id": "blazar_host_id",
-        "hypervisor_hostname": "hypervisor_hostname",
-    },
+    source=_audit_blazar_host_source,
+    context_cols={"hypervisor_hostname": "hypervisor_hostname"},
+    start_col="start",
+    end_col="end",
     resource_cols={
         ResourceTypes.NODE: pl.lit(1),
-        ResourceTypes.VCPUS: pl.col("vcpus"),
-        ResourceTypes.MEMORY_MB: pl.col("memory_mb"),
-        ResourceTypes.DISK_GB: pl.col("local_gb"),
+        ResourceTypes.VCPUS: pl.col("vcpus").cast(pl.Float64),
+        ResourceTypes.MEMORY_MB: pl.col("memory_mb").cast(pl.Float64),
+        ResourceTypes.DISK_GB: pl.col("local_gb").cast(pl.Float64),
     },
 )
 
@@ -171,73 +214,15 @@ blazarDeviceCommitted = Adapter(
 )
 
 
-##################
-# Audit adapters
-##################
-
-# Shared: convert audit rows → intervals and extract JSON fields.
-# Each audit table gets a source function here; adapters filter on predicates.
-
-_BLAZAR_HOST_AUDIT_FIELDS = [
-    "hypervisor_hostname",
-    "vcpus",
-    "memory_mb",
-    "local_gb",
-    "status",
-    "reservable",
-    "disabled",
-]
-
-_blazar_host_usable = pl.col("reservable").cast(pl.Int64).eq(1) & pl.col(
-    "disabled"
-).cast(pl.Int64).eq(0)
-
-
-def _audit_blazar_host_source(tables):
-    """Audit rows → intervals with extracted JSON fields."""
-    intervals = audit_to_intervals(tables[Tables.AUDIT_BLAZAR_HOSTS])
-    return extract_json_fields(intervals, _BLAZAR_HOST_AUDIT_FIELDS)
-
-
-_audit_blazar_context = {"hypervisor_hostname": "hypervisor_hostname"}
-_audit_blazar_resources = {
-    ResourceTypes.NODE: pl.lit(1),
-    ResourceTypes.VCPUS: pl.col("vcpus").cast(pl.Float64),
-    ResourceTypes.MEMORY_MB: pl.col("memory_mb").cast(pl.Float64),
-    ResourceTypes.DISK_GB: pl.col("local_gb").cast(pl.Float64),
-}
-
-auditBlazarHostUsable = Adapter(
-    entity_col="id",
-    metric=M.RESERVABLE_USABLE,
-    source=lambda t: _audit_blazar_host_source(t).filter(_blazar_host_usable),
-    context_cols=_audit_blazar_context,
-    start_col="start",
-    end_col="end",
-    resource_cols=_audit_blazar_resources,
-)
-
-auditBlazarHostUnusable = Adapter(
-    entity_col="id",
-    metric=M.RESERVABLE_UNUSABLE,
-    source=lambda t: _audit_blazar_host_source(t).filter(~_blazar_host_usable),
-    context_cols=_audit_blazar_context,
-    start_col="start",
-    end_col="end",
-    resource_cols=_audit_blazar_resources,
-)
-
 REGISTRY = AdapterRegistry(
     [
         novaHostTotal,
-        blazarHostReservable,
+        auditBlazarHostReservable,
         blazarAllocCommitted,
         novaInstanceOccupiedReservation,
         novaInstanceOccupiedOndemand,
         blazarDeviceReservable,
         blazarDeviceCommitted,
-        auditBlazarHostUsable,
-        auditBlazarHostUnusable,
     ]
 )
 
@@ -249,14 +234,22 @@ def load_intervals(
     """Load raw intervals from parquet, optionally filtered to time range.
 
     Args:
-        base_path: Path to parquet files
-        site_name: Site directory name
+        parquet_path: Path to parquet files
         time_range: Optional (start, end) to filter intervals that overlap this window
     """
     tables = load_raw_tables(parquet_path)
     intervals = REGISTRY.to_intervals(tables).with_columns(
         pl.lit("current").alias("collector_type")
     )
+
+    # Tag host-based intervals with usability from audit table
+    if Tables.AUDIT_BLAZAR_HOSTS in tables:
+        usability = _usability_events(tables)
+        intervals = tag_intervals(intervals, usability, by="hypervisor_hostname")
+    else:
+        intervals = intervals.with_columns(
+            pl.lit(None).cast(pl.Boolean).alias("usable")
+        )
 
     if time_range is not None:
         range_start, range_end = time_range
