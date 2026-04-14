@@ -97,6 +97,8 @@ class WideOutput(pa.DataFrameModel):
     reservable_usable: float = pa.Field(nullable=True, default=0.0)
     reservable_unusable: float = pa.Field(nullable=True, default=0.0)
     committed: float
+    committed_usable: float = pa.Field(nullable=True, default=0.0)
+    committed_unusable: float = pa.Field(nullable=True, default=0.0)
     occupied_ondemand: float
     occupied_reserved: float
     active_ondemand: float

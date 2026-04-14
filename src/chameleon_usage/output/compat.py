@@ -15,57 +15,58 @@ OUTPUT_TABLE = "usage_wide"
 def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
     usage: pl.DataFrame = UsageModel.validate(long_df)
 
-    pivoted = (
-        usage.filter(
-            (pl.col("collector_type") == "current"),
-            (pl.col("resource") == RT.NODE),
+    nodes = usage.filter(
+        (pl.col("collector_type") == "current"),
+        (pl.col("resource") == RT.NODE),
+    )
+
+    # Coerce usable to string for pivot key: "true"/"false"/"null"
+    has_usable = "usable" in nodes.columns
+    if has_usable:
+        nodes = nodes.with_columns(
+            pl.col("usable").cast(pl.Utf8).fill_null("null").alias("_usable_key")
         )
-        .select("timestamp", "site", "metric", "value")
+    else:
+        nodes = nodes.with_columns(pl.lit("null").alias("_usable_key"))
+
+    # Pivot on metric_usable composite key
+    nodes = nodes.with_columns(
+        (pl.col("metric") + pl.lit("_") + pl.col("_usable_key")).alias("_pivot_key")
+    )
+
+    # Totals: sum across usable states per (timestamp, site, metric)
+    totals = (
+        nodes.select("timestamp", "site", "metric", "value")
         .group_by(["timestamp", "site", "metric"])
         .agg(pl.col("value").sum())
         .pivot(on="metric", index=["timestamp", "site"], values="value")
     )
 
-    # Handle case where columns are totally missing
-    cols = set(pivoted.columns)
-    if M.TOTAL not in cols:
-        pivoted = pivoted.with_columns(pl.col(M.RESERVABLE).alias(M.TOTAL))
-        logger.warning("TOTAL not in columns, setting == RESERVABLE")
-    if M.OCCUPIED_RESERVATION not in cols:
-        pivoted = pivoted.with_columns(
-            pl.col(M.COMMITTED).alias(M.OCCUPIED_RESERVATION)
-        )
-        logger.warning("OCCUPIED_RESERVED not in columns, setting == COMMITTED")
-    if M.OCCUPIED_ONDEMAND not in cols:
-        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.OCCUPIED_ONDEMAND))
-        logger.warning("OCCUPIED_ONDEMAND not in columns, setting == 0")
-    if M.RESERVABLE_USABLE not in cols:
-        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.RESERVABLE_USABLE))
-    if M.RESERVABLE_UNUSABLE not in cols:
-        pivoted = pivoted.with_columns(pl.lit(0.0).alias(M.RESERVABLE_UNUSABLE))
-
-    # Handle case where columns missing for a specific site
-    site_missing_total = pl.col(M.TOTAL).is_null().all().over("site")
-    site_missing_occ_res = pl.col(M.OCCUPIED_RESERVATION).is_null().all().over("site")
-    site_missing_occ_on = pl.col(M.OCCUPIED_ONDEMAND).is_null().all().over("site")
-
-    pivoted = pivoted.with_columns(
-        # Set total = reservable if missing
-        pl.when(site_missing_total)
-        .then(pl.col(M.RESERVABLE))
-        .otherwise(pl.col(M.TOTAL))
-        .alias(M.TOTAL),
-        # Set occupied reserved = committed if missing
-        pl.when(site_missing_occ_res)
-        .then(pl.col(M.COMMITTED))
-        .otherwise(pl.col(M.OCCUPIED_RESERVATION))
-        .alias(M.OCCUPIED_RESERVATION),
-        # Set occupied ondemand = 0 if missing
-        pl.when(site_missing_occ_on)
-        .then(pl.lit(0.0))
-        .otherwise(pl.col(M.OCCUPIED_ONDEMAND))
-        .alias(M.OCCUPIED_ONDEMAND),
+    # Usable breakdowns: pivot on metric_usable
+    breakdowns = (
+        nodes.filter(pl.col("_usable_key") != "null")
+        .select("timestamp", "site", "_pivot_key", "value")
+        .group_by(["timestamp", "site", "_pivot_key"])
+        .agg(pl.col("value").sum())
+        .pivot(on="_pivot_key", index=["timestamp", "site"], values="value")
     )
+
+    pivoted = totals.join(breakdowns, on=["timestamp", "site"], how="left")
+
+    # Ensure all expected columns exist
+    for col in [
+        M.TOTAL,
+        M.RESERVABLE,
+        M.COMMITTED,
+        M.OCCUPIED_RESERVATION,
+        M.OCCUPIED_ONDEMAND,
+        "reservable_true",
+        "reservable_false",
+        "committed_true",
+        "committed_false",
+    ]:
+        if col not in pivoted.columns:
+            pivoted = pivoted.with_columns(pl.lit(0.0).alias(col))
 
     wide = (
         pivoted.select(
@@ -74,9 +75,11 @@ def to_compat_format(long_df: pl.DataFrame) -> pl.DataFrame:
             pl.lit(RT.NODE).alias("resource"),
             pl.col(M.TOTAL),
             pl.col(M.RESERVABLE),
-            pl.col(M.RESERVABLE_USABLE).alias("reservable_usable"),
-            pl.col(M.RESERVABLE_UNUSABLE).alias("reservable_unusable"),
+            pl.col("reservable_true").alias("reservable_usable"),
+            pl.col("reservable_false").alias("reservable_unusable"),
             pl.col(M.COMMITTED),
+            pl.col("committed_true").alias("committed_usable"),
+            pl.col("committed_false").alias("committed_unusable"),
             pl.col(M.OCCUPIED_ONDEMAND),
             pl.col(M.OCCUPIED_RESERVATION).alias("occupied_reserved"),
             pl.col(M.OCCUPIED_ONDEMAND).alias("active_ondemand"),
