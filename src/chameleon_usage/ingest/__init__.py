@@ -45,18 +45,30 @@ def _audit_blazar_host_source(tables):
 def _usability_events(tables) -> pl.LazyFrame:
     """Build usability intervals per host from the audit table.
 
-    Backfilled rows provide the baseline usability state per host.
-    Transition timestamps are only accurate for non-backfill rows,
-    but the state itself (reservable/disabled) is correct at backfill time.
+    Events are clipped to the earliest ``audit_changed_at`` (i.e. when
+    audit logging first went live). Anything before that is untrusted —
+    backfill rows carry today's flags tagged with historical event_time,
+    so we let the pre-bookend in ``tag_intervals`` fill that range with
+    ``usable=null``.
 
     Returns [hypervisor_hostname, event_start, event_end, usable].
     """
+    raw = tables[Tables.AUDIT_BLAZAR_HOSTS]
+    cutoff = raw.select(pl.col("audit_changed_at").min()).collect().item()
+
     audit = _audit_blazar_host_source(tables)
-    return audit.select(
+    events = audit.select(
         "hypervisor_hostname",
         pl.col("start").alias("event_start"),
         pl.col("end").alias("event_end"),
         _blazar_host_usable.alias("usable"),
+    )
+    if cutoff is None:
+        return events
+    return events.filter(
+        pl.col("event_end").is_null() | (pl.col("event_end") > cutoff)
+    ).with_columns(
+        pl.max_horizontal("event_start", pl.lit(cutoff)).alias("event_start")
     )
 
 
