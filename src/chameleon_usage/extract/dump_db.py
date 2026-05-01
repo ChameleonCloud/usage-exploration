@@ -43,6 +43,7 @@ TABLES = {
     ],
     "keystone": [
         "user",
+        "federated_user",
         "project",
     ],
     "zun": [
