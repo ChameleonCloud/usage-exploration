@@ -30,6 +30,8 @@ TABLES = {
     "blazar": [
         "computehosts",
         "computehost_allocations",
+        "computehost_extra_capabilities",
+        "computehost_reservations",
         "reservations",
         "instance_reservations",
         "leases",
@@ -37,6 +39,11 @@ TABLES = {
         "device_allocations",
         "device_extra_capabilities",
         "device_reservations",
+        "resource_properties",
+    ],
+    "keystone": [
+        "user",
+        "project",
     ],
     "zun": [
         "container",
