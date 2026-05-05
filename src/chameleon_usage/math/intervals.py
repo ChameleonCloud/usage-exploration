@@ -18,6 +18,8 @@ correct tag for its time range. The algorithm has two phases:
 
 import polars as pl
 
+from chameleon_usage.exceptions import IntervalOverlapError
+
 
 def tag_intervals(
     intervals: pl.LazyFrame,
@@ -140,7 +142,7 @@ def _raise_on_overlaps(
         .collect()
     )
     if overlaps.height > 0:
-        raise ValueError(
+        raise IntervalOverlapError(
             f"overlapping tag events on key {by!r}: {overlaps.height} row(s); "
             f"sample:\n{overlaps.head(5)}"
         )

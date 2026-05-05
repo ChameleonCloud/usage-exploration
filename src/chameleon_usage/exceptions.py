@@ -7,6 +7,10 @@ class RawTableLoadError(Exception):
     pass
 
 
+class IntervalOverlapError(ValueError):
+    pass
+
+
 class RawTableMissingError(RawTableLoadError):
     pass
 

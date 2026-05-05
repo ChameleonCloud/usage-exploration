@@ -7,7 +7,11 @@ from pathlib import Path
 import polars as pl
 
 from chameleon_usage.config import SiteConfig, load_config
-from chameleon_usage.exceptions import RawTableLoadError, log_raw_table_load_error
+from chameleon_usage.exceptions import (
+    IntervalOverlapError,
+    RawTableLoadError,
+    log_raw_table_load_error,
+)
 from chameleon_usage.extract.dump_db import dump_to_parquet, generate_grant_sql
 from chameleon_usage.ingest import load_intervals
 from chameleon_usage.ingest.metadata import (
@@ -126,6 +130,9 @@ def cmd_process(args):
             site_usage = run_pipeline(intervals, spec, resample_interval=args.resample)
         except RawTableLoadError as exc:
             log_raw_table_load_error(logger, config.key, exc)
+            continue
+        except IntervalOverlapError as exc:
+            logger.error("[%s] interval overlap, skipping site: %s", config.key, exc)
             continue
         except Exception:
             logger.exception("[%s] unhandled exception", config.key)
