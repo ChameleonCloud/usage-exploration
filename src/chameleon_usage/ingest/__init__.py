@@ -45,24 +45,43 @@ def _audit_blazar_host_source(tables):
 def _usability_events(tables) -> pl.LazyFrame:
     """Build usability intervals per host from the audit table.
 
-    Events are clipped to the earliest ``audit_changed_at`` (i.e. when
-    audit logging first went live). Anything before that is untrusted —
-    backfill rows carry today's flags tagged with historical event_time,
-    so we let the pre-bookend in ``tag_intervals`` fill that range with
-    ``usable=null``.
+    For computehost intervals, we compute a stream of intervals per
+    hypervisor_hostname, instead of per primary-key ID, as multiple primary IDs
+    may map to the same hypervisor_hostname in the following cases:
+    1. A blazar host, nova service, or compute node is deleted and reenrolled.
+    2. Due to bugs, duplicate blazar hosts for the same physical host.
+
+    By using hypervisor_hostname as the key, events from all relevent entities
+    will be combined into one interval stream. This is correct in case 1, since
+    they don't overlap in time.
+
+    HACK: For case 2, it is not strictly correct, but the behavior in this case
+    is undefined in blazar too. Because the semantics are complicated, and this
+    is a rare case, just combine the results so reporting can continue.
+    TODO: clearly attribute this error data in the output...
+
+    Finally, usability data is "clipped" to th earliest `audit_changed_at`
+    timestamp, as anything before that is "backfilled' data, and doesn't
+    indicate usability.
 
     Returns [hypervisor_hostname, event_start, event_end, usable].
     """
     raw = tables[Tables.AUDIT_BLAZAR_HOSTS]
     cutoff = raw.select(pl.col("audit_changed_at").min()).collect().item()
 
-    audit = _audit_blazar_host_source(tables)
-    events = audit.select(
+    fields = extract_json_fields(raw, _BLAZAR_HOST_AUDIT_FIELDS)
+    intervals = audit_to_intervals(fields, entity_col="hypervisor_hostname")
+    events = intervals.select(
         "hypervisor_hostname",
         pl.col("start").alias("event_start"),
         pl.col("end").alias("event_end"),
         _blazar_host_usable.alias("usable"),
     )
+    return _clip_events_to_cutoff(events, cutoff)
+
+
+def _clip_events_to_cutoff(events: pl.LazyFrame, cutoff) -> pl.LazyFrame:
+    """Drop events ending entirely before cutoff; clamp event_start up to cutoff."""
     if cutoff is None:
         return events
     return events.filter(
